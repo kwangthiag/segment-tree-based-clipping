@@ -1,2 +1,1 @@
-# clipping-log
-# segment-tree-based-clipping
+# # segment-tree-based-clipping
