@@ -15,14 +15,14 @@ CC = pgc++
 # GOPT = 
 # OPT = 
 # CFLAGS = -c -acc
-LIBCUDA = -L/opt/nvidia/hpc_sdk/Linux_x86_64/23.1/cuda/11.8/lib64
+LIBCUDA = -L$(HOME)/nvhpc/Linux_x86_64/25.5/cuda/12.9/lib64
 
 
 # DEBUG =  -Minfo=all
-DEBUG = -fast -fastsse -Mipa=fast
+DEBUG = -fast -fastsse -Mipa=fast -g
 GOPT = -Xptxas -O2
 OPT = -O2
-CFLAGS = -c -acc  -O2
+CFLAGS = -c -acc -mp -O2 -Ilib/PAM/include -Ilib/parlaylib/include -Ip_seg_tree/segment_tree
 
 DEBUG += -DTIME # TIME flag is used to extract run times in the functions
 DEBUG += -DTIME_L2 # TIME_L2 flag is used to extract run times inside parallel functions
@@ -45,11 +45,13 @@ all: cpu
 
 cpu: util.o thrust_func.o oacc_segment_tree.o  clip.o 
 	# $(CC) -acc -O2 -o bin/seg bin/util.o thrust_func.o oacc_segment_tree.o bin/clip.o 
-	$(CC) -acc $(OPT) -ta=multicore -o bin/seg bin/util.o bin/oacc_segment_tree.o bin/clip.o $(LIBCUDA) -lcudart
+	$(CC) -acc $(OPT) -mp -o bin/seg bin/util.o bin/oacc_segment_tree.o bin/clip.o $(LIBCUDA) -lcudart
 
 gpu: util.o thrust_func.o oacc_segment_tree_gpu.o  clip_gpu.o 
 	$(CC) -acc $(OPT) -o bin/seg bin/util.o bin/thrust_func.o bin/oacc_segment_tree_gpu.o bin/clip_gpu.o  $(LIBCUDA) -lcudart
 	
+pam: util.o thrust_func.o pam_segment_tree.o clip.o
+	$(CC) -acc $(OPT) -mp -o bin/seg bin/util.o bin/pacc_segment_tree.o bin/clip.o $(LIBCUDA) -lcudart
 
 clip.o: src/clip.cpp
 	# $(CC) $(CFLAGS) $(DEBUG) -o clip.o -c clip.cpp 
@@ -74,7 +76,6 @@ oacc_segment_tree.o: p_seg_tree/oacc_segment_tree.cpp
 	# $(CC)  $(CFLAGS) $(DEBUG) p_seg_tree/oacc_segment_tree.cpp	
 
 
-
 oacc_segment_tree_gpu.o: p_seg_tree/oacc_segment_tree.cpp
 	# $(CC) -g $(CFLAGS) $(DEBUG) p_seg_tree/oacc_segment_tree.cpp -fopenmp	 
 	$(CC) $(CFLAGS) $(DEBUG) -o bin/oacc_segment_tree_gpu.o p_seg_tree/oacc_segment_tree.cpp -fopenmp	
@@ -86,6 +87,10 @@ clip_gpu.o: src/clip.cpp
 thrust_func.o: p_seg_tree/thrust_func.cu
 	nvcc $(GOPT) -o bin/thrust_func.o -c p_seg_tree/thrust_func.cu -ccbin /usr/bin/gcc-12 -allow-unsupported-compiler 
 
+# pam_segment_tree.o: p_seg_tree/pam_segment_tree.cpp
+#     $(CC) $(CFLAGS) $(DEBUG) -o bin/pam_segment_tree.o p_seg_tree/pam_segment_tree.cpp -fopenmp   
+pam_segment_tree.o: p_seg_tree/pam_segment_tree.cpp p_seg_tree/segment_tree/pam_segment_tree.h
+	$(CC) $(CFLAGS) $(DEBUG) -c p_seg_tree/pam_segment_tree.cpp -o $@
 
 # polyclip_time.o: lib/optimizedFostersAlgorithm/polyclip_time.cpp
 # 	$(CC) -g $(CFLAGS) $(DEBUG) lib/optimizedFostersAlgorithm/polyclip_time.cpp

@@ -1,5 +1,7 @@
 #include <thrust/scan.h>
+#include <thrust/sort.h>
 #include <thrust/execution_policy.h>
+
 
 #include "segment_tree/data_types.h"
 #include "segment_tree/edge.h"

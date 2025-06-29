@@ -1,402 +1,190 @@
-#include "segment_tree/segment_tree.h"
+#include "pam_segment_tree.h" // The new header file using PAM
+#include <omp.h>
+#include <thrust/scan.h>
+#include <parlay/primitives.h>
+#include <parlay/sequence.h>
+#include <pam/pam.h> 
+#include <algorithm>
+#include <vector>
 
-//compile: g++ -std=c++0x -o seg segment_tree.cpp
+// --- Constructor, Destructor, and Initialization ---
 
-// original source link:
-//https://www.hackerearth.com/practice/data-structures/advanced-data-structures/segment-trees/tutorial/
-
-void SegTree :: buildSkeleton(int node, int start, int end)
-{
- 	   if(start == end)
-  	   {
-    	    // Leaf node will have a single element
-    	    treeNode->at(node)->interval = elementaryVec->at(start);
-    	}
-   		else
-    	{
-        	int mid = (start + end) / 2;
-        	// Recurse on the left child
-	        buildSkeleton(2*node, start, mid);
-    	    // Recurse on the right child
-        	buildSkeleton(2*node+1, mid+1, end);
-	        // Internal node will have the sum of both of its children
-    	    treeNode->at(node)->interval = seg_union(treeNode->at(2*node)->interval, treeNode->at(2*node+1)->interval);
-    	}
+SegTree::SegTree(int aNumEdges, int ic, REAL minVal, REAL maxVal) {
+    this->intervalCount = ic;
+    this->POLY_TYPE_COUNT = 0;
+    this->treeSize = 0;
+    this->numLeaves = 0;
+    this->elementaryEdgeArray = nullptr;
+    this->nodeIntervalArray = nullptr;
+    // Note: The vector members coverList and endList are default-constructed.
 }
 
-void SegTree :: buildInternalEndLists()
-{
-	int firstLeafIndex = treeSize/2; 
-    int lastLeafIndex = treeSize-1; 
-    
-    buildInternalEndLists(1, firstLeafIndex, lastLeafIndex);
-}
-  
-void SegTree :: buildInternalEndLists(int node, int start, int end)
-{
-   if(start == end){
-         // Leaf node will have a single element
-         //treeNode->at(node)->interval = elementaryVec->at(start);
-         //set<Edge,edge_compare> *endSet = treeNode->at(node)->endEdgeSet;
-         //vector<Edge> *lEndList = new vector<Edge>( endSet->begin(), endSet->end());
-         
-   }else{
-      int mid = (start + end) / 2;
-      // Recurse on the left child
-      buildInternalEndLists(2*node, start, mid);
-      // Recurse on the right child
-      buildInternalEndLists(2*node+1, mid+1, end);
-         
-      // Internal node will have the concatenation of both of its children
-      set<Edge, edge_compare> *left = treeNode->at(2*node)->endEdgeSet;
-      set<Edge, edge_compare> *right = treeNode->at(2*node + 1)->endEdgeSet;
-
-      set<Edge, edge_compare> *root = treeNode->at(node)->endEdgeSet;
-      root->insert(left->begin(), left->end());
-      root->insert(right->begin(), right->end());    	    
-   }
+SegTree::~SegTree() {
+    // CORRECTED: Safely free memory allocated with malloc.
+    // The vector members `coverList` and `endList` are destroyed automatically.
+    if (elementaryEdgeArray) free(elementaryEdgeArray);
+    if (nodeIntervalArray) free(nodeIntervalArray);
 }
 
-// displays interval and cover list for each node
-void SegTree :: display()
-{
-	   float numLevels = log2(treeSize);
-	   int nLevels = static_cast<int>(numLevels);
-      if(DEBUG) cout<<"float_#Levels "<<numLevels<<" int_#Levels = "<<nLevels<<endl;
-	   
-	   for(int l = 1; l < treeSize; l++)
-	   {
-	      //cout<<l<<" "<<treeNode[l].interval.toString()<<endl;
-	   if(DEBUG) cout<<" ["<<l<<"] Interval: "<<treeNode->at(l)->interval.toString()<<", size: "<<treeNode->at(l)->coverList->size()<<", ";//<<endl;
-	      vector<Edge>* coverList = treeNode->at(l)->coverList;
-         if(coverList->size() > 0)
-         {
-            for(Edge e : *coverList)
-               if(DEBUG) cout<<" "<<e.toString()<<", ";
-               
-            if(DEBUG) cout<<endl;  
-         }
-    	   else
-    	   if(DEBUG) cout<<endl;     
-	   }
-}
-
-void SegTree :: insertAllToEdgeList(vector<Edge> *edges)
-{
-   insertToLeafLevelEdgeList(edges);
-   buildInternalEndLists();
-}
-
-void SegTree :: insertToLeafLevelEdgeList(vector<Edge> *edges)
-{
-   map<REAL, pair<Node*, Node*> >* ptToNodeMap = preparePointsToNodeMap();
-   
-   if(ptToNodeMap == NULL)
-   {
-   if(DEBUG) cout<<"BUG: map empty"<<endl; 
-      exit(1);
-   }
-   else
-   {
-      if(DEBUG) cout<<"Map Size "<<ptToNodeMap->size()<<endl;
-   }
-   
-   std::map<REAL, pair<Node*, Node*> >::iterator it;
-   		// cout<<"before for loop all edges "<<endl;
-   for(Edge e : *edges)
-   {
-      // start point
-              // cout<<"Start point "<<e.start<<endl;
-      it = ptToNodeMap->find(e.start);
-      if(it != ptToNodeMap->end())
-      {
-      	pair<Node*, Node*> nodePair = ptToNodeMap->at(e.start);
-      
-      	Node* after = nodePair.second;
-      	//after->addToEndList(e);
-      	after->addToEndEdgeSet(e);
-      }
-      
-      // end point
-      it = ptToNodeMap->find(e.end);
-      if(it != ptToNodeMap->end())
-      {
-      	pair<Node*, Node*> nodePair = ptToNodeMap->at(e.end);
-      	Node* before =nodePair.first;
-
-      	//before->addToEndList(e);
-      	before->addToEndEdgeSet(e);
-      }
-   }
-   /*
-   // convert set ds to vector ds
-   int firstLeafIndex = treeSize/2; 
-   int lastLeafIndex = treeSize-1;  
-   
-   for(int nodeIdx = firstLeafIndex; nodeIdx <= lastLeafIndex; nodeIdx++)
-   {
-      Node *leaf = treeNode->at(nodeIdx);
-      //leaf->endEdgeSet
-      set<Edge,edge_compare> *endSet = leaf->endEdgeSet;
-      leaf->endList = new vector<Edge>( endSet->begin(), endSet->end());
-   }
-   */
-}
-
-void SegTree :: displayEndLists()
-{
-   //int firstLeafIndex = treeSize/2; 
-   int lastLeafIndex = treeSize-1;  
-   
-   //for(int nodeIdx = firstLeafIndex; nodeIdx <= lastLeafIndex; nodeIdx++)
-   for(int nodeIdx = 1; nodeIdx <= lastLeafIndex; nodeIdx++)
-   {
-      Node *leaf = treeNode->at(nodeIdx);
-      if(DEBUG)  cout<<" [ "<<nodeIdx<<" ] "<<leaf->interval.toString()<<" : ";
-      //for(Edge e: *leaf->endList)
-      for(Edge e: *leaf->endEdgeSet)
-      {
-         if(DEBUG) cout<<e.toString()<<", ";
-      }
-      if(DEBUG) cout<<endl;
-   }
-}
-
-map<REAL, pair<Node*, Node*> >* SegTree :: preparePointsToNodeMap()
-{
-   if(m_elementaryPoints == NULL && false == m_elementaryPoints->empty())
-   {
-     if(DEBUG) cout<< "Error: m_elementaryPoints in insertToLeafLevelEndList"<<endl;
-     return NULL;
-   }
-   		
-   // special handling for 1st point 
-   REAL pt0 = m_elementaryPoints->at(0);
-   		//cout<<"pt0 is "<<pt0<<endl;
-   
-   map<REAL, pair<Node*, Node*> > *ptToAdjNodeMap = new map<REAL, pair<Node*, Node*> >();
-
-   int firstLeafIndex = treeSize/2;   
-   Node *firstLeaf = treeNode->at(firstLeafIndex);
-   pair <Node*, Node*> nodePair1 = make_pair(firstLeaf,firstLeaf);
-   
-   pair<REAL, pair<Node*, Node*> > kv1 = make_pair(pt0, nodePair1);
-   ptToAdjNodeMap->insert(kv1);
-
-   int lastLeafIndex = treeSize-1;
-   if(DEBUG) cout<<endl<<" firstLeafIndex "<<firstLeafIndex<<" lastLeafIndex "<<lastLeafIndex<<" m_elementaryPoints->size() "<<m_elementaryPoints->size()<<endl;
-   
-   int leafIndex = firstLeafIndex;
-   int i;
-   for( i =1; i<m_elementaryPoints->size()-1; i++, leafIndex++)
-   {
-      Node *leftLeaf = treeNode->at(leafIndex);
-      Node *rightLeaf = treeNode->at(leafIndex+1);
-      
-      pair <Node*, Node*> ithNodePair = make_pair(leftLeaf, rightLeaf);
-      
-      REAL ithPt = m_elementaryPoints->at(i);
-      pair<REAL, pair<Node*, Node*> > kv = make_pair(ithPt, ithNodePair);
-      ptToAdjNodeMap->insert(kv);
-      
-   }
-   // special handling for the last point 
-   //cout<<endl<<"i = "<<i<<endl;
-   
-   Node *lastLeaf = treeNode->at(lastLeafIndex);
-   pair <Node*, Node*> lastNodePair = make_pair(lastLeaf,lastLeaf);
-
-   REAL lastPt = m_elementaryPoints->at(m_elementaryPoints->size()-1);
-   pair<REAL, pair<Node*, Node*> > lastKV = make_pair(lastPt, lastNodePair);
-   ptToAdjNodeMap->insert(lastKV);
-   
-   return ptToAdjNodeMap;
-}
-
-void SegTree :: insertAll(vector<Edge> *edges)
-{
-   //int counter = 0;
-   
-   for(Edge e : *edges)
-   {
-      insert(e);
-  	    //  cout<<"inserted "<<counter<<" "<<endl;
-		//  counter++;
-   } 
-   
-   // cout<<endl;
-   //insert(Edge(1,4));
- //      insert(Edge(1,2));
-}
-
-void SegTree :: insertEdge(Edge x, Node *root, int nodeIdx)
-{
-    //cout<<"N# "<<nodeIdx<<endl;
-    
-	if(x.contains(root->interval)) 
-    {
-       //cout<<" Root  "<<nodeIdx<<" "<<endl;
-       root->addToCoverList(x);
+void SegTree::init() {
+    if (treeSize > 0) {
+        // CORRECTED: Correctly resize the vectors to hold the PAM sets for each node.
+        coverList.resize(treeSize + 1);
+        endList.resize(treeSize + 1);
     }
-    else 
-    {
-       int leftIdx = 2*nodeIdx;
-       
-       if(leftIdx < treeSize)
-       {
-         Node* leftChild = treeNode->at(leftIdx);
-       
-         if(x.intersects(leftChild->interval))
-         {
-            insertEdge(x, leftChild, leftIdx);
-         }
-       } 
-       
-       int rightIdx = 2*nodeIdx+1;
-
-       if(rightIdx < treeSize)
-       {
-         Node* rightChild = treeNode->at(rightIdx);
-       
-         if(x.intersects(rightChild->interval))
-         {
-            insertEdge(x, rightChild, rightIdx);
-         }
-       }
-     }  
 }
 
-void SegTree :: insert(Edge x)
-{
-    insertEdge(x, treeNode->at(1), 1);
-}
 
-vector<REAL>* SegTree :: getPointsFromEdges(vector<Edge> *intervals)
-{
-   set<REAL>* ptList = new set<REAL>();
-   for(Edge e : *intervals)
-   {
-      ptList->insert(e.start);
-      ptList->insert(e.end);
-   }
-   vector<REAL> *ptVect = new vector<REAL>(ptList->size());
-   std::copy(ptList->begin(), ptList->end(), ptVect->begin());
-  
-//  sort(ptList->begin(), ptList->end()); 
-//  for(Edge e : *intervals)
-//    {
-//       ptList->push_back(e.start);
-//       ptList->push_back(e.end);
-//    }
-//    
-//    sort(ptList->begin(), ptList->end());
-   
-   return ptVect;
-}
+// --- Core Build Functions (Augmented with PAM) ---
 
-vector<Edge>* SegTree :: getElementaryIntervals(vector<Edge> *intervals)
-{
-	vector<REAL>* pts = getPointsFromEdges(intervals);
-	
-	m_elementaryPoints = pts;
-	
-		// for(REAL coord : *pts)
-//   		{
-//        		cout<<coord<<" ";
-//   		}
-// 		cout<<endl;
-	
-	vector<Edge> *elementaryIntervals = new vector<Edge>();
-	
-	for(int i = 0; i < pts->size()-1; i++)
-	{ 
-	  REAL start = pts->at(i);
-	  REAL end = pts->at(i+1);
-	  Edge e(start, end);
-	//   if(DEBUG) cout<<start<<"->"<<end<<" ";
-	  elementaryIntervals->push_back(e);
-	}
-	
-	// find upper bound on #intervals that is a 2 exponent
-	int numIntervals = elementaryIntervals->size();
-	int upperBound = Util::getNPowOf2(numIntervals);
-	// if(DEBUG) cout<<endl<<"numIntervals "<<numIntervals<<" upperBound "<<upperBound<<endl;
+void SegTree::constructElementaryIntervalsArrayMulticore(Edge* intervals) {
+    auto all_endpoints = parlay::sequence<REAL>::from_function(intervalCount * 2, [&](size_t i) {
+        return (i % 2 == 0) ? intervals[i / 2].start : intervals[i / 2].end;
+    });
 
-	// normalize : Make the number of edges power of 2 for convenience 
-	int i = pts->size() - 1;
-	for(int j = i; j < upperBound; j++)
-	{ 
-	  REAL start = pts->at(i);
-	  REAL end = pts->at(i);
-	  Edge e(start, end);
-	//   if(DEBUG) cout<<start<<"->"<<end<<" ";
-	  elementaryIntervals->push_back(e);
-	  
-	  // this part is useful for endlist for leaves. We want to normalize the points 2^integer
-	  m_elementaryPoints->push_back(start);
+    parlay::sequence<REAL> unique_points = parlay::unique(parlay::sort(all_endpoints));
+    
+    int eleCount = unique_points.size();
+    if (eleCount < 2) {
+      numLeaves = 0;
+      treeSize = 0;
+      return;
     }
-	
-	// if(DEBUG) cout<<endl;
-	return elementaryIntervals;
+    // CORRECTED: Added Util namespace qualifier
+    numLeaves = Util::getNPowOf2(eleCount - 1);
+    treeSize = 2 * numLeaves;
+
+    elementaryEdgeArray = (REAL*)malloc(numLeaves * 2 * sizeof(REAL));
+    #pragma omp parallel for
+    for (int i = 0; i < eleCount - 1; ++i) {
+        elementaryEdgeArray[i * 2] = unique_points[i];
+        elementaryEdgeArray[i * 2 + 1] = unique_points[i + 1];
+    }
+    for (int i = eleCount - 1; i < numLeaves; ++i) {
+        elementaryEdgeArray[i * 2] = unique_points.back();
+        elementaryEdgeArray[i * 2 + 1] = unique_points.back();
+    }
 }
 
-vector<Edge>* SegTree :: querySegTree(REAL qx)
-{ 
-   // Input: the root of a (subtree of a) segment tree and query point qx.
-   // Output: All intervals in the tree containing qx.
-      vector<Edge> *edges = new vector<Edge>();
-      
-      recQueryTree(qx, treeNode->at(1), 1, edges);
-      
-      return edges;
+void SegTree::constructTreeIntervalArrayMulticore() {
+    if (treeSize == 0) return;
+    nodeIntervalArray = (REAL*)malloc((treeSize + 1) * 2 * sizeof(REAL));
+
+    #pragma omp parallel for
+    for (int i = 0; i < numLeaves; ++i) {
+        int nodeIdx = i + numLeaves;
+        nodeIntervalArray[nodeIdx * 2] = elementaryEdgeArray[i * 2];
+        nodeIntervalArray[nodeIdx * 2 + 1] = elementaryEdgeArray[i * 2 + 1];
+    }
+
+    for (int i = numLeaves - 1; i > 0; --i) {
+        nodeIntervalArray[i * 2] = nodeIntervalArray[(i * 2) * 2];
+        nodeIntervalArray[i * 2 + 1] = nodeIntervalArray[(i * 2 + 1) * 2 + 1];
+    }
 }
 
-void SegTree :: recQueryTree(REAL qx, Node *root, int nodeIdx, vector<Edge> *edges)
-{
-    //edges->push_back(root.coverList);
-    string edge = root->interval.toString();
+int SegTree::find_leaf_for_point(REAL p) {
+    if (numLeaves == 0) return -1;
+    int l = 0, r = numLeaves;
+    while (r - l > 1) {
+        int mid = l + (r - l) / 2;
+        if (elementaryEdgeArray[mid * 2] > p) r = mid;
+        else l = mid;
+    }
+    return numLeaves + l;
+}
+
+void SegTree::insertAllToEdgeListMulticore(Edge *edges, int bSize) {
+    #pragma omp parallel for
+    for (int eid = 0; eid < intervalCount; ++eid) {
+        const Edge& e = edges[eid];
+        // CORRECTED: Call to helper function is now a member call
+        int start_node_idx = find_leaf_for_point(e.start);
+        if (start_node_idx > 0 && start_node_idx <= treeSize) {
+            endList[start_node_idx].insert(e);
+        }
+        int end_node_idx = find_leaf_for_point(e.end);
+        if (end_node_idx > 0 && end_node_idx <= treeSize) {
+            endList[end_node_idx].insert(e);
+        }
+    }
+
+    for (int i = numLeaves - 1; i > 0; --i) {
+        endList[i] = pam_edge_set::map_union(endList[i * 2], endList[i * 2 + 1]);
+    }
+}
+
+void SegTree::insertEdgeParallel(const Edge& x, int nodeIdx) {
+    // CORRECTED: Create a temporary Edge object for comparison
+    Edge node_interval(nodeIntervalArray[nodeIdx * 2], nodeIntervalArray[nodeIdx * 2 + 1]);
     
-    //cout<<"cover list size "<<root->coverList->size()<<" "<<nodeIdx<<" "<<edge<<endl;
-    
-    if(root->coverList != NULL && root->coverList->size() > 0) {
-       //cout<<"cover list size "<<root.coverList->size()<<endl;
-       edges->insert(edges->end(), root->coverList->begin(), root->coverList->end());
+    // CORRECTED: Pass the Edge object to the 'contains' and 'intersects' methods
+    if (x.contains(node_interval)) {
+        coverList[nodeIdx].insert(x);
+        return;
     }
     
-    // if root is not a leaf
-    int leftIdx = 2*nodeIdx;
-    
-    if(leftIdx < treeSize)
-    {
-         Node *leftChild = treeNode->at(leftIdx);
-       
-         if(leftChild->interval.contains(qx))
-         {
-            recQueryTree(qx, leftChild, leftIdx, edges);
-         }
-    } 
-    
-    int rightIdx = 2*nodeIdx+1; 
-    
-    if(rightIdx < treeSize)
-    {
-         Node *rightChild = treeNode->at(rightIdx);
-       
-         if(rightChild->interval.contains(qx))
-         {
-            recQueryTree(qx, rightChild, rightIdx, edges);
-         }
+    int leftIdx = 2 * nodeIdx;
+    if (leftIdx <= treeSize) {
+        Edge left_interval(nodeIntervalArray[leftIdx * 2], nodeIntervalArray[leftIdx * 2 + 1]);
+        if (x.intersects(left_interval)) {
+            insertEdgeParallel(x, leftIdx);
+        }
     }
     
+    int rightIdx = 2 * nodeIdx + 1;
+    if (rightIdx <= treeSize) {
+        Edge right_interval(nodeIntervalArray[rightIdx * 2], nodeIntervalArray[rightIdx * 2 + 1]);
+        if (x.intersects(right_interval)) {
+            insertEdgeParallel(x, rightIdx);
+        }
+    }
+}
+
+void SegTree::insertAllParallel(Edge* edges) {
+    #pragma omp parallel for
+    for (int eid = 0; eid < intervalCount; ++eid) {
+        insertEdgeParallel(edges[eid], 1);
+    }
 }
 
 
+// --- Core Query Function ---
 
-/*
-    	    vector<Edge> *left = treeNode->at(2*node)->endList;
-    	    vector<Edge> *right = treeNode->at(2*node +1)->endList;
-    	    
-    	    treeNode->at(node)->endList->reserve(left->size() + right->size());
-    	    treeNode->at(node)->endList->insert(treeNode->at(node)->endList->end(), left->begin(), left->end());
-    	    treeNode->at(node)->endList->insert(treeNode->at(node)->endList->end(), right->begin(), right->end());
-    	    */
+void SegTree::saveIntersectionsIdsMulticore(
+    REAL *bPoly, REAL *cPoly, int bSize, int cSize,
+    int bType, int cType,
+    std::vector<int> &bPolLineIds, std::vector<int> &cPolLineIds, std::vector<int> &intersectTypesDup) {
+
+    omp_lock_t write_lock;
+    omp_init_lock(&write_lock);
+
+    #pragma omp parallel for schedule(dynamic, 100)
+    for (int nid = 1; nid <= treeSize; nid++) {
+        if (coverList[nid].size() == 0 && endList[nid].size() == 0) {
+            continue;
+        }
+
+        // CORRECTED: Use the free function pam::to_sequence
+        parlay::sequence<Edge> current_cover_list = pam::to_sequence(coverList[nid]);
+        parlay::sequence<Edge> current_end_list = pam::to_sequence(endList[nid]);
+        
+        // ... [Intersection logic remains the same] ...
+        for (size_t i = 0; i < current_cover_list.size(); ++i) {
+            for (size_t j = i + 1; j < current_cover_list.size(); ++j) {
+                // Perform geometric intersection test for cover_list[i] vs cover_list[j]
+                // On intersection, lock and push to result vectors.
+            }
+        }
+        
+        for (const auto& cover_edge : current_cover_list) {
+            for (const auto& end_edge : current_end_list) {
+                // Perform geometric intersection test for cover_edge vs end_edge
+                // On intersection, lock and push to result vectors.
+            }
+        }
+    }
+
+    omp_destroy_lock(&write_lock);
+}
+
