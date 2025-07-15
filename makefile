@@ -34,11 +34,12 @@ ifdef S
     DEBUG += -DSAVE
 endif
 
-ifdef gpu 
-	DEBUG += -DGPU
+ifdef gpu
+    DEBUG += -DGPU
 else
-	DEBUG += -DCPU
+    DEBUG += -DPAM #Just leave it to confirm that it compiles, was -DCPU before
 endif
+
 
 # default compilation
 all: cpu  
@@ -49,9 +50,11 @@ cpu: util.o thrust_func.o oacc_segment_tree.o  clip.o
 
 gpu: util.o thrust_func.o oacc_segment_tree_gpu.o  clip_gpu.o 
 	$(CC) -acc $(OPT) -o bin/seg bin/util.o bin/thrust_func.o bin/oacc_segment_tree_gpu.o bin/clip_gpu.o  $(LIBCUDA) -lcudart
-	
+
+# PAM target
+pam: pam=1 # Sets the pam variable for this- target
 pam: util.o thrust_func.o pam_segment_tree.o clip.o
-	$(CC) -acc $(OPT) -mp -o bin/seg bin/util.o bin/pacc_segment_tree.o bin/clip.o $(LIBCUDA) -lcudart
+	$(CC) -acc $(OPT) -mp -o bin/seg bin/util.o bin/pam_segment_tree.o bin/clip.o $(LIBCUDA) -lcudart
 
 clip.o: src/clip.cpp
 	# $(CC) $(CFLAGS) $(DEBUG) -o clip.o -c clip.cpp 
@@ -75,6 +78,8 @@ oacc_segment_tree.o: p_seg_tree/oacc_segment_tree.cpp
 	$(CC) $(CFLAGS) $(DEBUG) -o bin/oacc_segment_tree.o p_seg_tree/oacc_segment_tree.cpp -fopenmp	 
 	# $(CC)  $(CFLAGS) $(DEBUG) p_seg_tree/oacc_segment_tree.cpp	
 
+pam_segment_tree.o: p_seg_tree/pam_segment_tree.cpp
+	$(CC) $(CFLAGS) $(DEBUG) -o bin/pam_segment_tree.o p_seg_tree/pam_segment_tree.cpp -fopenmp	 
 
 oacc_segment_tree_gpu.o: p_seg_tree/oacc_segment_tree.cpp
 	# $(CC) -g $(CFLAGS) $(DEBUG) p_seg_tree/oacc_segment_tree.cpp -fopenmp	 
@@ -89,8 +94,6 @@ thrust_func.o: p_seg_tree/thrust_func.cu
 
 # pam_segment_tree.o: p_seg_tree/pam_segment_tree.cpp
 #     $(CC) $(CFLAGS) $(DEBUG) -o bin/pam_segment_tree.o p_seg_tree/pam_segment_tree.cpp -fopenmp   
-pam_segment_tree.o: p_seg_tree/pam_segment_tree.cpp p_seg_tree/segment_tree/pam_segment_tree.h
-	$(CC) $(CFLAGS) $(DEBUG) -c p_seg_tree/pam_segment_tree.cpp -o $@
 
 # polyclip_time.o: lib/optimizedFostersAlgorithm/polyclip_time.cpp
 # 	$(CC) -g $(CFLAGS) $(DEBUG) lib/optimizedFostersAlgorithm/polyclip_time.cpp
