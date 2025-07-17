@@ -24,7 +24,11 @@ Step5: Merge scan beams pair-wise
 #include <openacc.h>
 #endif
 
+#ifdef PAM
+#include "../p_seg_tree/segment_tree/pam_segment_tree.h"
+#else
 #include "../p_seg_tree/segment_tree/segment_tree.h"
+#endif
 #include "../p_seg_tree/util/thrust_func.h"
 
 // #include "lib/optimizedFostersAlgorithm/polyclip_time.h"
@@ -264,6 +268,7 @@ void gpc_read_multi_polygon(FILE *bfp, FILE **cfp, int cPolyCount, REAL **bPoly,
       *(*earr + id) = curr;
       // cout<<(*earr+id)->id<<" -- "<<(*earr+id)->type<<" *** "<<(*earr+id)->start<<" "<<(*earr+id)->end<<endl;
       id++;
+      #ifndef pam
       if (minInterval > curr.start)
       {
         minInterval = curr.start;
@@ -272,6 +277,7 @@ void gpc_read_multi_polygon(FILE *bfp, FILE **cfp, int cPolyCount, REAL **bPoly,
       {
         maxInterval = curr.end;
       }
+      #endif
       vtex = point2D(*(*cPoly + v2), *(*cPoly + v2 + 1));
       cPolyList.newVertex(vtex, true);
     }
@@ -2146,8 +2152,8 @@ void pam_clipping(int argc, char *argv[]) {
   // gpc_read_polygon(bFile, cFile, &bPoly, &cPoly, bSize, cSize, &intervals, ic, minVal, maxVal);
   gpc_read_multi_polygon(bFile, cFile, cPolyCount, &bPoly, &cPoly, bSize, clSize, cSizes, &intervals, ic, minVal, maxVal);
 
-  // duplicates the base polygon allowing the clipping layer polygons to work on clipping independently
-  duplicateBasePoly(cPolyCount);
+  // // duplicates the base polygon allowing the clipping layer polygons to work on clipping independently
+  // duplicateBasePoly(cPolyCount);
 
   // -------------------------------------------------
   #ifdef TIME
@@ -2156,20 +2162,38 @@ void pam_clipping(int argc, char *argv[]) {
   start_time = omp_get_wtime();
   // create empty tree
   int numEdges=bSize+clSize;
-  SegTree sTree(numEdges, ic, minVal, maxVal);
+  // for (int i = 0; i < numEdges; ++i) {
+  //   cout << intervals[i].toString() << endl;
+  // }
+  vector<int> startPositions(cPolyCount+1);
+  vector<int> endPositions(cPolyCount+1);
+  startPositions[1] = bSize;
+  endPositions[0] = bSize;
+  // cout << cPolyCount << endl;
+  for (int i = 0; i < cPolyCount + 1; ++i) {
+    cout << cSizes[i] << " ";
+  } 
+  cout << endl;
+  // cSizes[cType]-cSizes[cListId]-1
+  for (int i = 1; i < cPolyCount+1; ++i) {
+    if (i != cPolyCount) startPositions[i+1] = cSizes[i]-cSizes[i-1]-1 + startPositions[i];
+    endPositions[i] = cSizes[i]-cSizes[i-1]-1 + startPositions[i];
+  }
+  // endPositions.back() = numEdges;
+  for (int i:startPositions) cout<<i<<endl;
+  for (int i:endPositions) cout<<i<<endl;
+  //Create segment tree with only polygon B. I added a clause that minval, maxval is only for pam.
+  SegTree sTree(bSize, ic, minVal, maxVal);
   // ----------------------------    
   #ifdef DG 
-  cout << "Empty segment tree with " << numEdges << " edges created" << endl;
+  cout << "Empty segment tree with " << bSize << " edges created" << endl;
   #endif
-  // sTree.constructElementaryIntervalsArrayCMBR(intervals, cmbr);
-  // sTree.constructElementaryIntervalsArrayParallel(intervals);
-  sTree.constructElementaryIntervalsArrayMulticore(intervals);
-  // sTree.constructElementaryIntervalsArrayGPUParallel(intervals);
+
   #ifdef TIME
   cp34 = high_resolution_clock::now();
   #endif
 
-  sTree.init();
+  // sTree.init();
   #ifdef TIME
   cp35 = high_resolution_clock::now();
   #endif
@@ -2179,7 +2203,7 @@ void pam_clipping(int argc, char *argv[]) {
   #endif
 
   sTree.POLY_TYPE_COUNT = argc - 1;
-  sTree.runAlgorithmMulticore(intervals, numEdges);
+  sTree.buildSegtreeSingleCore(intervals, bSize); //only B.
   #ifdef TIME
   cp14 = high_resolution_clock::now();
   #endif
@@ -2197,390 +2221,391 @@ void pam_clipping(int argc, char *argv[]) {
   cout << "Build finished" << endl;
   #endif
 
-//   int maxId;
-//   if(bSize>=(clSize+cPolyCount))
-//     maxId=bSize;
-//   else
-//     maxId=(clSize+cPolyCount);
+  int maxId;
+  if(bSize>=(clSize+cPolyCount))
+    maxId=bSize;
+  else
+    maxId=(clSize+cPolyCount);
 
-//   #ifdef TIME
-//   cp10 = high_resolution_clock::now();
-//   #endif
+  #ifdef TIME
+  cp10 = high_resolution_clock::now();
+  #endif
 
-//   #ifdef DG 
-//   cout << "End lists starting.." << endl;
-//   #endif
-//   sTree.insertAllToEdgeListMulticore(intervals, maxId);
-//   #ifdef TIME
-//   cp11 = high_resolution_clock::now();
-//   #endif
+  #ifdef DG 
+  cout << "End lists starting.." << endl;
+  #endif
+  // sTree.insertAllToEdgeListMulticore(intervals, maxId);
+  #ifdef TIME
+  cp11 = high_resolution_clock::now();
+  #endif
 
-//   #ifdef DG 
-//   cout << "End lists done" << endl;
-//   #endif
+  #ifdef DG 
+  cout << "End lists done" << endl;
+  #endif
 
-//   #ifdef TIME
-//   cp8 = high_resolution_clock::now();
-//   #endif
+  #ifdef TIME
+  cp8 = high_resolution_clock::now();
+  #endif
 
-//   #ifdef DG 
-//   cout << "Cover lists starting..." << endl;
-//   #endif
+  #ifdef DG 
+  cout << "Cover lists starting..." << endl;
+  #endif
 
-//   sTree.insertAllParallel(intervals);
+  // sTree.insertAllParallel(intervals);
     
-//   #ifdef DG 
-//   cout << "Cover lists built" << endl;
-//   #endif
+  #ifdef DG 
+  cout << "Cover lists built" << endl;
+  #endif
 
-//   #ifdef TIME
-//   cp9 = high_resolution_clock::now();
-//   #endif
+  #ifdef TIME
+  cp9 = high_resolution_clock::now();
+  #endif
 
-//   int lts = sTree.treeSize;
-//   for (int i = 0; i < lts; ++i)
-//   {
-//     // omp_destroy_lock(&lock[i] );
-//     omp_destroy_lock(&sTree.lock[i]);
-//   }
+  int lts = sTree.treeSize;
+  // for (int i = 0; i < lts; ++i)
+  // {
+  //   // omp_destroy_lock(&lock[i] );
+  //   omp_destroy_lock(&sTree.lock[i]);
+  // }
 
-//   // convert tree coverlists  to array and offload data to GPU
-//   #ifdef TIME
-//   cp12 = high_resolution_clock::now();
-//   #endif
-//   // sTree.countEndlistCoverListSizesMulticore();
-//   // sTree.copyNodeCoverListMulticore();
-//   // if(DEBUG) cout<<"Cover lists copied to GPU"<<endl;
-//   #ifdef TIME
-//   cp13 = high_resolution_clock::now();
-//   #endif
+  // convert tree coverlists  to array and offload data to GPU
+  #ifdef TIME
+  cp12 = high_resolution_clock::now();
+  #endif
+  // sTree.countEndlistCoverListSizesMulticore();
+  // sTree.copyNodeCoverListMulticore();
+  // if(DEBUG) cout<<"Cover lists copied to GPU"<<endl;
+  #ifdef TIME
+  cp13 = high_resolution_clock::now();
+  #endif
 
-//   #ifdef TIME
-//   cp2 = high_resolution_clock::now();
-//   #endif
-//  // using STL vector
-//   int ncount = sTree.treeSize; // node 0 is invalid. True node count is treeSeze-2
-//   int bType=0; //bType is base polygon type. Always 0. bListId is the base poly id from the linked list
+  #ifdef TIME
+  cp2 = high_resolution_clock::now();
+  #endif
+ // using STL vector
+  int ncount = sTree.treeSize; // node 0 is invalid. True node count is treeSeze-2
+  int bType=0; //bType is base polygon type. Always 0. bListId is the base poly id from the linked list
 
-// // ====================================================================================
-//   // **************** when b<c swap b and c for that case only. *************
-// // ====================================================================================
+// ====================================================================================
+  // **************** when b<c swap b and c for that case only. *************
+// ====================================================================================
 
-//   // loop over all clipping layer polygons
-//   for (int bListId=0, cListId=0, cType=1; cType<=cPolyCount; cType++, bListId++, cListId++){ 
-//   // for (int bListId=0, cListId=0, cType=1; cType<=1; cType++, bListId++, cListId++){ 
-//     vector<int> bPolLineIdsDup, cPolLineIdsDup, intersectTypesDup;
-//     // base bType is always 0. cType>=1. 
-//     // When accessing cSize[] or cPoly[] use (cListId) as id of current clipping polygon
-//     int *bPolLineIdsSortedIndexDup;
+  // loop over all clipping layer polygons
+  for (int bListId=0, cListId=0, cType=1; cType<=cPolyCount; cType++, bListId++, cListId++){ 
+  // for (int bListId=0, cListId=0, cType=1; cType<=1; cType++, bListId++, cListId++){ 
+    vector<int> bPolLineIdsDup, cPolLineIdsDup, intersectTypesDup;
+    // base bType is always 0. cType>=1. 
+    // When accessing cSize[] or cPoly[] use (cListId) as id of current clipping polygon
+    int *bPolLineIdsSortedIndexDup;
 
-//     cSize=cSizes[cType]-cSizes[cListId]-1;
-//     // cSize=clSize;
-//     // use pointer vector
-
-//     sTree.saveIntersectionsIdsMulticore // for case 2
-//     // sTree.saveIntersectionsIdsMulticore2
-//         (bPoly, cPoly, bSize, cSize,
-//         bType, cType,
-//         bPolLineIdsDup, cPolLineIdsDup, intersectTypesDup);
+    cSize=cSizes[cType]-cSizes[cListId]-1;
+    // cSize=clSize;
+    // use pointer vector
+    cout <<"fml bro" << endl;
+    // sTree.saveIntersectionsIdsMulticore // for case 2
+    // sTree.saveIntersectionsIdsMulticore2
+    sTree.getIntersectionsSingleCore
+      (intervals, startPositions[cType], bPoly, cPoly, bSize, cSize,
+        bType, cType,
+        bPolLineIdsDup, cPolLineIdsDup, intersectTypesDup);
     
-//     int intersectCountDup = bPolLineIdsDup.size();
-//     bPolLineIdsSortedIndexDup = (int *)malloc((intersectCountDup) * sizeof(int));
-//     #ifdef DG
-//     cout << "Intersecting IDs saved" << endl;
-//     #endif
+    int intersectCountDup = bPolLineIdsDup.size();
+    bPolLineIdsSortedIndexDup = (int *)malloc((intersectCountDup) * sizeof(int));
+    #ifdef DG
+    cout << "Intersecting IDs saved" << endl;
+    #endif
 
-//     #ifdef TIME
-//     cp18 = high_resolution_clock::now();
-//     #endif
-//     radixsort(&bPolLineIdsDup[0], bPolLineIdsSortedIndexDup, intersectCountDup, bSize * 2);
+    #ifdef TIME
+    cp18 = high_resolution_clock::now();
+    #endif
+    radixsort(&bPolLineIdsDup[0], bPolLineIdsSortedIndexDup, intersectCountDup, bSize * 2);
 
-//     int *bPolLineIds, *cPolLineIds;
-//     int *intersectTypes, *bPolLineIdsSortedIndex, intersectCount;
-//     bPolLineIds = (int *)malloc((intersectCountDup) * sizeof(int));
-//     cPolLineIds = (int *)malloc((intersectCountDup) * sizeof(int));
-//     intersectTypes = (int *)malloc((intersectCountDup) * sizeof(int));
-//     bPolLineIdsSortedIndex = (int *)malloc((intersectCountDup) * sizeof(int));
+    int *bPolLineIds, *cPolLineIds;
+    int *intersectTypes, *bPolLineIdsSortedIndex, intersectCount;
+    bPolLineIds = (int *)malloc((intersectCountDup) * sizeof(int));
+    cPolLineIds = (int *)malloc((intersectCountDup) * sizeof(int));
+    intersectTypes = (int *)malloc((intersectCountDup) * sizeof(int));
+    bPolLineIdsSortedIndex = (int *)malloc((intersectCountDup) * sizeof(int));
 
-//     // remove intersection duplicates
-//     removeDuplicatesAtEdge(&bPolLineIdsDup[0], &cPolLineIdsDup[0], &intersectTypesDup[0], bPolLineIdsSortedIndexDup, intersectCountDup,
-//                           bPolLineIds, cPolLineIds, intersectTypes, bPolLineIdsSortedIndex, intersectCount);
+    // remove intersection duplicates
+    removeDuplicatesAtEdge(&bPolLineIdsDup[0], &cPolLineIdsDup[0], &intersectTypesDup[0], bPolLineIdsSortedIndexDup, intersectCountDup,
+                          bPolLineIds, cPolLineIds, intersectTypes, bPolLineIdsSortedIndex, intersectCount);
     
-//     #ifdef DG
-//     cout << intersectCountDup << " intersections found. " << intersectCountDup - intersectCount << " duplicate(s) removed. " << intersectCount << " remaining." << endl;
-//     #endif
+    #ifdef DG
+    cout << intersectCountDup << " intersections found. " << intersectCountDup - intersectCount << " duplicate(s) removed. " << intersectCount << " remaining." << endl;
+    #endif
 
-//     int *cPolLineIdsSortedIndex;
-//     cPolLineIdsSortedIndex = (int *)malloc((intersectCountDup) * sizeof(int));
+    int *cPolLineIdsSortedIndex;
+    cPolLineIdsSortedIndex = (int *)malloc((intersectCountDup) * sizeof(int));
 
-//     // sort cPolLineIds
-//     radixsort(cPolLineIds, cPolLineIdsSortedIndex, intersectCount, clSize * 2);
+    // sort cPolLineIds
+    radixsort(cPolLineIds, cPolLineIdsSortedIndex, intersectCount, clSize * 2);
       
-//     #ifdef DG
-//     cout << "Sorted candidate edges by ID" << endl;
-//     #endif
-//     // printIntArray(bPolLineIds, intersectCountDup, "bPolLineIds");
-//     // printIntArray(cPolLineIds, intersectCountDup, "cPolLineIds");
+    #ifdef DG
+    cout << "Sorted candidate edges by ID" << endl;
+    #endif
+    // printIntArray(bPolLineIds, intersectCountDup, "bPolLineIds");
+    // printIntArray(cPolLineIds, intersectCountDup, "cPolLineIds");
 
-//     // get intersection counts at each edge for both polygons
-//     int *bAllIntersectCounts, *cAllIntersectCounts;
-//     int *bNonDegenIntersectCounts, *cNonDegenIntersectCounts;
-//     bAllIntersectCounts = (int *)malloc(((bSize + 1)) * sizeof(int));
-//     cAllIntersectCounts = (int *)malloc(((cSize + 1)) * sizeof(int));
-//     bNonDegenIntersectCounts = (int *)malloc(((bSize + 1)) * sizeof(int));
-//     cNonDegenIntersectCounts = (int *)malloc(((cSize + 1)) * sizeof(int));
+    // get intersection counts at each edge for both polygons
+    int *bAllIntersectCounts, *cAllIntersectCounts;
+    int *bNonDegenIntersectCounts, *cNonDegenIntersectCounts;
+    bAllIntersectCounts = (int *)malloc(((bSize + 1)) * sizeof(int));
+    cAllIntersectCounts = (int *)malloc(((cSize + 1)) * sizeof(int));
+    bNonDegenIntersectCounts = (int *)malloc(((bSize + 1)) * sizeof(int));
+    cNonDegenIntersectCounts = (int *)malloc(((cSize + 1)) * sizeof(int));
 
-//     // default values for the extra location to use for prefix sum
-//     bAllIntersectCounts[bSize] = 0;
-//     cAllIntersectCounts[cSize] = 0;
-//     bNonDegenIntersectCounts[bSize] = 0;
-//     cNonDegenIntersectCounts[cSize] = 0;
+    // default values for the extra location to use for prefix sum
+    bAllIntersectCounts[bSize] = 0;
+    cAllIntersectCounts[cSize] = 0;
+    bNonDegenIntersectCounts[bSize] = 0;
+    cNonDegenIntersectCounts[cSize] = 0;
 
-//     int *bPolLineUniqueIds;
-//     int *cPolLineUniqueIds;
-//     bPolLineUniqueIds = (int *)malloc((intersectCount) * sizeof(int));
-//     cPolLineUniqueIds = (int *)malloc((intersectCount) * sizeof(int));
+    int *bPolLineUniqueIds;
+    int *cPolLineUniqueIds;
+    bPolLineUniqueIds = (int *)malloc((intersectCount) * sizeof(int));
+    cPolLineUniqueIds = (int *)malloc((intersectCount) * sizeof(int));
 
-//     int uniqueIntersectEdgeCountB, uniqueIntersectEdgeCountC;
-//     countEdgeIntersections(bPolLineIds, bPolLineIdsSortedIndex, 0, intersectTypes, intersectCount,
-//                           'b', bAllIntersectCounts, bNonDegenIntersectCounts, bPolLineUniqueIds, bSize,
-//                           &uniqueIntersectEdgeCountB);
+    int uniqueIntersectEdgeCountB, uniqueIntersectEdgeCountC;
+    countEdgeIntersections(bPolLineIds, bPolLineIdsSortedIndex, 0, intersectTypes, intersectCount,
+                          'b', bAllIntersectCounts, bNonDegenIntersectCounts, bPolLineUniqueIds, bSize,
+                          &uniqueIntersectEdgeCountB);
 
-//     // printIntArray(bAllIntersectCounts, (bSize+1), "bAllIntersectCounts");
-//     // printIntArray(bNonDegenIntersectCounts, (bSize+1), "bNonDegenIntersectCounts");
-//     // printIntArray(bPolLineUniqueIds, intersectCount, "bPolLineUniqueIds");
+    // printIntArray(bAllIntersectCounts, (bSize+1), "bAllIntersectCounts");
+    // printIntArray(bNonDegenIntersectCounts, (bSize+1), "bNonDegenIntersectCounts");
+    // printIntArray(bPolLineUniqueIds, intersectCount, "bPolLineUniqueIds");
 
-//     #ifdef DG
-//     cout << "Base polygon edges counted" << endl;
-//     #endif
-//     countEdgeIntersections(cPolLineIds, cPolLineIdsSortedIndex, cSizes[cListId], intersectTypes, intersectCount,
-//                           'c', cAllIntersectCounts, cNonDegenIntersectCounts, cPolLineUniqueIds, cSize,
-//                           &uniqueIntersectEdgeCountC);
+    #ifdef DG
+    cout << "Base polygon edges counted" << endl;
+    #endif
+    countEdgeIntersections(cPolLineIds, cPolLineIdsSortedIndex, cSizes[cListId], intersectTypes, intersectCount,
+                          'c', cAllIntersectCounts, cNonDegenIntersectCounts, cPolLineUniqueIds, cSize,
+                          &uniqueIntersectEdgeCountC);
 
-//     // printIntArray(cAllIntersectCounts, (cSize+1), "cAllIntersectCounts");
-//     // printIntArray(cNonDegenIntersectCounts, (cSize+1), "cNonDegenIntersectCounts");
-//     // printIntArray(cPolLineUniqueIds, intersectCount, "cPolLineUniqueIds");
+    // printIntArray(cAllIntersectCounts, (cSize+1), "cAllIntersectCounts");
+    // printIntArray(cNonDegenIntersectCounts, (cSize+1), "cNonDegenIntersectCounts");
+    // printIntArray(cPolLineUniqueIds, intersectCount, "cPolLineUniqueIds");
 
-//     #ifdef DG
-//     cout<<"Clipping polygon edges counted. b unique edge count="<<uniqueIntersectEdgeCountB<<". c unique edge count="<<uniqueIntersectEdgeCountC<<endl;
-//     #endif
-//     // prefix sum of the edge counts
-//     // #pragma acc routine seq
-//     // thrust::exclusive_scan(thrust::host, bAllIntersectCounts, bAllIntersectCounts+bSize+1, bAllIntersectCounts);
-//     thrust::exclusive_scan(bAllIntersectCounts, bAllIntersectCounts + bSize + 1, bAllIntersectCounts);
-//     thrust::exclusive_scan(cAllIntersectCounts, cAllIntersectCounts + cSize + 1, cAllIntersectCounts);
-//     thrust::exclusive_scan(bNonDegenIntersectCounts, bNonDegenIntersectCounts + bSize + 1, bNonDegenIntersectCounts);
-//     thrust::exclusive_scan(cNonDegenIntersectCounts, cNonDegenIntersectCounts + cSize + 1, cNonDegenIntersectCounts);
+    #ifdef DG
+    cout<<"Clipping polygon edges counted. b unique edge count="<<uniqueIntersectEdgeCountB<<". c unique edge count="<<uniqueIntersectEdgeCountC<<endl;
+    #endif
+    // prefix sum of the edge counts
+    // #pragma acc routine seq
+    // thrust::exclusive_scan(thrust::host, bAllIntersectCounts, bAllIntersectCounts+bSize+1, bAllIntersectCounts);
+    thrust::exclusive_scan(bAllIntersectCounts, bAllIntersectCounts + bSize + 1, bAllIntersectCounts);
+    thrust::exclusive_scan(cAllIntersectCounts, cAllIntersectCounts + cSize + 1, cAllIntersectCounts);
+    thrust::exclusive_scan(bNonDegenIntersectCounts, bNonDegenIntersectCounts + bSize + 1, bNonDegenIntersectCounts);
+    thrust::exclusive_scan(cNonDegenIntersectCounts, cNonDegenIntersectCounts + cSize + 1, cNonDegenIntersectCounts);
 
-//     // printIntArray(bNonDegenIntersectCounts, (bSize+1), "prefix sum bNonDegenIntersectCounts");
-//     // printIntArray(cAllIntersectCounts, (cSize+1), "prefix sum cAllIntersectCounts");
-//     // printIntArray(cNonDegenIntersectCounts, (cSize+1), "prefix sum cNonDegenIntersectCounts");
+    // printIntArray(bNonDegenIntersectCounts, (bSize+1), "prefix sum bNonDegenIntersectCounts");
+    // printIntArray(cAllIntersectCounts, (cSize+1), "prefix sum cAllIntersectCounts");
+    // printIntArray(cNonDegenIntersectCounts, (cSize+1), "prefix sum cNonDegenIntersectCounts");
 
-//     #ifdef DG
-//       cout << "Edge prefix sums calculated" << endl;
-//     #endif
+    #ifdef DG
+      cout << "Edge prefix sums calculated" << endl;
+    #endif
 
-//     int bNonDegenCount = bNonDegenIntersectCounts[bSize];
-//     int cNonDegenCount = cNonDegenIntersectCounts[cSize];
-//     int bIntersectedCount = bSize + bNonDegenCount;
-//     int cIntersectedCount = cSize + cNonDegenCount;
+    int bNonDegenCount = bNonDegenIntersectCounts[bSize];
+    int cNonDegenCount = cNonDegenIntersectCounts[cSize];
+    int bIntersectedCount = bSize + bNonDegenCount;
+    int cIntersectedCount = cSize + cNonDegenCount;
 
-//     #ifdef DG
-//     cout << "Poly B: non-degen count=" << bNonDegenCount << " total=" << bIntersectedCount;
-//     #endif
-//     #ifdef DG
-//     cout << " Poly C: non-degen count=" << cNonDegenCount << " total=" << cIntersectedCount << endl;
-//     #endif
-//     // cout<<bSize<<" "<<cSize<<" "<<bSize+cSize<<" "<<sTree.treeSize<<" "<<intersectCount<<" ";
+    #ifdef DG
+    cout << "Poly B: non-degen count=" << bNonDegenCount << " total=" << bIntersectedCount;
+    #endif
+    #ifdef DG
+    cout << " Poly C: non-degen count=" << cNonDegenCount << " total=" << cIntersectedCount << endl;
+    #endif
+    // cout<<bSize<<" "<<cSize<<" "<<bSize+cSize<<" "<<sTree.treeSize<<" "<<intersectCount<<" ";
 
-//     // save only intersections in new arrays
-//     // remove intersectType saving here. It is completed at polyClipArrayParallel()
-//     REAL *intersections;
-//     intersections = (REAL *)malloc((2 * intersectCount) * sizeof(REAL));
+    // save only intersections in new arrays
+    // remove intersectType saving here. It is completed at polyClipArrayParallel()
+    REAL *intersections;
+    intersections = (REAL *)malloc((2 * intersectCount) * sizeof(REAL));
 
-//     int *intersectAlphaValuesB, *intersectAlphaValuesC;
-//     intersectAlphaValuesB = (int *)malloc((intersectCount) * sizeof(int));
-//     intersectAlphaValuesC = (int *)malloc((intersectCount) * sizeof(int));
+    int *intersectAlphaValuesB, *intersectAlphaValuesC;
+    intersectAlphaValuesB = (int *)malloc((intersectCount) * sizeof(int));
+    intersectAlphaValuesC = (int *)malloc((intersectCount) * sizeof(int));
 
-//     sTree.saveIntersectionsParallel(bPoly, cPoly,
-//                                     bPolLineIds, cPolLineIds, intersectCount,
-//                                     intersections, intersectTypes,
-//                                     intersectAlphaValuesB, intersectAlphaValuesC);
+    sTree.saveIntersectionsParallel(bPoly, cPoly,
+                                    bPolLineIds, cPolLineIds, intersectCount,
+                                    intersections, intersectTypes,
+                                    intersectAlphaValuesB, intersectAlphaValuesC);
     
-//     // printDoubleArray(intersections, intersectCount*2, "intersections");
-//     // printIntArray(intersectTypes, intersectCount, "intersectTypes");
-//     // printIntArray(intersectAlphaValuesB, intersectCount, "intersectAlphaValuesB");
-//     // printIntArray(intersectAlphaValuesC, intersectCount, "intersectAlphaValuesC");
+    // printDoubleArray(intersections, intersectCount*2, "intersections");
+    // printIntArray(intersectTypes, intersectCount, "intersectTypes");
+    // printIntArray(intersectAlphaValuesB, intersectCount, "intersectAlphaValuesB");
+    // printIntArray(intersectAlphaValuesC, intersectCount, "intersectAlphaValuesC");
     
-//     #ifdef DG
-//     cout << "Intersections saved" << endl;
-//     #endif
-//     // printIntArray(intersectTypes, intersectCount, "intersectTypes");
+    #ifdef DG
+    cout << "Intersections saved" << endl;
+    #endif
+    // printIntArray(intersectTypes, intersectCount, "intersectTypes");
     
-//     // printDoubleArray(intersections, intersectCount*2, "intersections");
+    // printDoubleArray(intersections, intersectCount*2, "intersections");
 
-//     // sort saved edges in the common intersections array
-//     int *sortedIndiciesB, *sortedIndiciesC;
-//     sortedIndiciesB = (int *)malloc((intersectCount) * sizeof(int));
-//     sortedIndiciesC = (int *)malloc((intersectCount) * sizeof(int));
+    // sort saved edges in the common intersections array
+    int *sortedIndiciesB, *sortedIndiciesC;
+    sortedIndiciesB = (int *)malloc((intersectCount) * sizeof(int));
+    sortedIndiciesC = (int *)malloc((intersectCount) * sizeof(int));
 
-//     sTree.sortIntersectionsAtEdgesParallel(intersectAlphaValuesB, bPolLineIdsSortedIndex, 0,
-//                                           bAllIntersectCounts, bNonDegenIntersectCounts, bPolLineUniqueIds, uniqueIntersectEdgeCountB, intersectCount,
-//                                           sortedIndiciesB);
+    sTree.sortIntersectionsAtEdgesParallel(intersectAlphaValuesB, bPolLineIdsSortedIndex, 0,
+                                          bAllIntersectCounts, bNonDegenIntersectCounts, bPolLineUniqueIds, uniqueIntersectEdgeCountB, intersectCount,
+                                          sortedIndiciesB);
 
 
-//     sTree.sortIntersectionsAtEdgesParallel(intersectAlphaValuesC, cPolLineIdsSortedIndex, cSizes[cListId],
-//                                           cAllIntersectCounts, cNonDegenIntersectCounts, cPolLineUniqueIds, uniqueIntersectEdgeCountC, intersectCount,
-//                                           sortedIndiciesC);      
-//     #ifdef DG
-//     cout << "Sort at edge completed" << endl;
-//     #endif
-//     // printDoubleArray(intersections, intersectCount*2, "intersections");
-//     // printIntArray(intersectTypes, intersectCount, "intersectTypes");
-//     // printIntArray(intersectAlphaValuesB, intersectCount, "intersectAlphaValuesB");
-//     // printIntArray(intersectAlphaValuesC, intersectCount, "intersectAlphaValuesC");
-//     // printDoubleArray(intersections, intersectCount*2, "intersections");
+    sTree.sortIntersectionsAtEdgesParallel(intersectAlphaValuesC, cPolLineIdsSortedIndex, cSizes[cListId],
+                                          cAllIntersectCounts, cNonDegenIntersectCounts, cPolLineUniqueIds, uniqueIntersectEdgeCountC, intersectCount,
+                                          sortedIndiciesC);      
+    #ifdef DG
+    cout << "Sort at edge completed" << endl;
+    #endif
+    // printDoubleArray(intersections, intersectCount*2, "intersections");
+    // printIntArray(intersectTypes, intersectCount, "intersectTypes");
+    // printIntArray(intersectAlphaValuesB, intersectCount, "intersectAlphaValuesB");
+    // printIntArray(intersectAlphaValuesC, intersectCount, "intersectAlphaValuesC");
+    // printDoubleArray(intersections, intersectCount*2, "intersections");
 
-//     REAL *intersectedB, *intersectedC;
-//     intersectedB = (REAL *)malloc((2 * bIntersectedCount) * sizeof(REAL));
-//     intersectedC = (REAL *)malloc((2 * cIntersectedCount) * sizeof(REAL));
+    REAL *intersectedB, *intersectedC;
+    intersectedB = (REAL *)malloc((2 * bIntersectedCount) * sizeof(REAL));
+    intersectedC = (REAL *)malloc((2 * cIntersectedCount) * sizeof(REAL));
 
-//     int *alphaValuesB, *alphaValuesC;
-//     int *neighborsB, *neighborsC;
-//     alphaValuesB = (int *)malloc((bIntersectedCount) * sizeof(int));
-//     alphaValuesC = (int *)malloc((cIntersectedCount) * sizeof(int));
-//     neighborsB = (int *)malloc((bIntersectedCount) * sizeof(int));
-//     neighborsC = (int *)malloc((cIntersectedCount) * sizeof(int));
+    int *alphaValuesB, *alphaValuesC;
+    int *neighborsB, *neighborsC;
+    alphaValuesB = (int *)malloc((bIntersectedCount) * sizeof(int));
+    alphaValuesC = (int *)malloc((cIntersectedCount) * sizeof(int));
+    neighborsB = (int *)malloc((bIntersectedCount) * sizeof(int));
+    neighborsC = (int *)malloc((cIntersectedCount) * sizeof(int));
 
-//     // data coping not rquired at this point. Existing CPU data update can be done with the available data
-//     sTree.copyIntersectionsParallel(bPoly, cPoly, bSize, cSize, cSizes[cListId],
-//                                     bPolLineIds, cPolLineIds, intersectCount,
-//                                     bPolLineIdsSortedIndex, cPolLineIdsSortedIndex,
-//                                     sortedIndiciesB, sortedIndiciesC,
-//                                     intersections, intersectTypes,
-//                                     bAllIntersectCounts, cAllIntersectCounts,
-//                                     bNonDegenIntersectCounts, cNonDegenIntersectCounts,
-//                                     intersectAlphaValuesB, intersectAlphaValuesC,
-//                                     intersectedB, intersectedC,
-//                                     neighborsB, neighborsC,
-//                                     alphaValuesB, alphaValuesC);
+    // data coping not rquired at this point. Existing CPU data update can be done with the available data
+    sTree.copyIntersectionsParallel(bPoly, cPoly, bSize, cSize, cSizes[cListId],
+                                    bPolLineIds, cPolLineIds, intersectCount,
+                                    bPolLineIdsSortedIndex, cPolLineIdsSortedIndex,
+                                    sortedIndiciesB, sortedIndiciesC,
+                                    intersections, intersectTypes,
+                                    bAllIntersectCounts, cAllIntersectCounts,
+                                    bNonDegenIntersectCounts, cNonDegenIntersectCounts,
+                                    intersectAlphaValuesB, intersectAlphaValuesC,
+                                    intersectedB, intersectedC,
+                                    neighborsB, neighborsC,
+                                    alphaValuesB, alphaValuesC);
 
-//     // printDoubleArray(intersectedB, bIntersectedCount*2, "intersectedB");
-//     // printDoubleArray(intersectedC, cIntersectedCount*2, "intersectedC");
-//     // printIntArray(neighborsB, bIntersectedCount, "neighborsB");
-//     // printIntArray(neighborsC, cIntersectedCount, "neighborsC");
-//     // printIntArray(alphaValuesB, bIntersectedCount, "alphaValuesB");
-//     // printIntArray(alphaValuesC, cIntersectedCount, "alphaValuesC");
+    // printDoubleArray(intersectedB, bIntersectedCount*2, "intersectedB");
+    // printDoubleArray(intersectedC, cIntersectedCount*2, "intersectedC");
+    // printIntArray(neighborsB, bIntersectedCount, "neighborsB");
+    // printIntArray(neighborsC, cIntersectedCount, "neighborsC");
+    // printIntArray(alphaValuesB, bIntersectedCount, "alphaValuesB");
+    // printIntArray(alphaValuesC, cIntersectedCount, "alphaValuesC");
       
-//     #ifdef DG
-//    cout << "Intersections copied to source arrays" << endl;
-//     #endif
-//     #ifdef TIME
-//     cp3 = high_resolution_clock::now();
-//     #endif
+    #ifdef DG
+   cout << "Intersections copied to source arrays" << endl;
+    #endif
+    #ifdef TIME
+    cp3 = high_resolution_clock::now();
+    #endif
 
-//     // initial labeling
-//     int *bInitLabels, *cInitLabels;
-//     bInitLabels = (int *)malloc((bIntersectedCount) * sizeof(int));
-//     cInitLabels = (int *)malloc((cIntersectedCount) * sizeof(int));
+    // initial labeling
+    int *bInitLabels, *cInitLabels;
+    bInitLabels = (int *)malloc((bIntersectedCount) * sizeof(int));
+    cInitLabels = (int *)malloc((cIntersectedCount) * sizeof(int));
 
-//     // intialize c initLables
-//     for(int i=0; i<cIntersectedCount; ++i) cInitLabels[i]=0;
+    // intialize c initLables
+    for(int i=0; i<cIntersectedCount; ++i) cInitLabels[i]=0;
 
-//     sTree.calculateInitLabelParallel(bSize, bNonDegenIntersectCounts,
-//                                     intersectedB, intersectedC, alphaValuesB,
-//                                     neighborsB,
-//                                     bIntersectedCount, cIntersectedCount, bInitLabels, cInitLabels);
-//     // printIntArray(bInitLabels, bIntersectedCount, "bInitLabels");
-//     // printIntArray(cInitLabels, cIntersectedCount, "cInitLabels");
-
-      
-//     #ifdef DG
-//     cout << "Initial labels calculated" << endl;
-//     #endif
-//     // copy data to the linked lists
-//     copyToLinkedList(intersectedB, intersectedC, bListId, cListId,
-//                     neighborsB, neighborsC,
-//                     alphaValuesB, alphaValuesC,
-//                     bIntersectedCount, cIntersectedCount,
-//                     bInitLabels, cInitLabels);
+    sTree.calculateInitLabelParallel(bSize, bNonDegenIntersectCounts,
+                                    intersectedB, intersectedC, alphaValuesB,
+                                    neighborsB,
+                                    bIntersectedCount, cIntersectedCount, bInitLabels, cInitLabels);
+    // printIntArray(bInitLabels, bIntersectedCount, "bInitLabels");
+    // printIntArray(cInitLabels, cIntersectedCount, "cInitLabels");
 
       
-//     #ifdef DG
-//     cout << "Copied to linked lists" << endl;
-//     #endif
-//       // print base and clipping polygons in their linked list form
-//     // next=bPolysList[0].root;
-//     // next=bPolysList[0].root;
-//     // int pid=0;
-//     // cout<<"Base poly "<<bIntersectedCount<<endl;
-//     // for(int i=0; i<bIntersectedCount; ++i){
-//     //   cout<<"pid="<<pid<<" x="<<next->p.x<<", y="<<next->p.y<<" label="<<next->label<<" enx="<<next->enex<<endl;
-//     //   next=next->next;
-//     // }
-//     // next=cPolysList[cListId].root;
-//     // cout<<"\nClip poly "<<cIntersectedCount<<endl;
-//     // for(int i=0; i<cIntersectedCount; ++i){
-//     //   cout<<"pid="<<pid<<" x="<<next->p.x<<", y="<<next->p.y<<" label="<<next->label<<" enx="<<next->enex<<endl;
-//     //   next=next->next;
-//     // }
+    #ifdef DG
+    cout << "Initial labels calculated" << endl;
+    #endif
+    // copy data to the linked lists
+    copyToLinkedList(intersectedB, intersectedC, bListId, cListId,
+                    neighborsB, neighborsC,
+                    alphaValuesB, alphaValuesC,
+                    bIntersectedCount, cIntersectedCount,
+                    bInitLabels, cInitLabels);
+
+      
+    #ifdef DG
+    cout << "Copied to linked lists" << endl;
+    #endif
+      // print base and clipping polygons in their linked list form
+    // next=bPolysList[0].root;
+    // next=bPolysList[0].root;
+    // int pid=0;
+    // cout<<"Base poly "<<bIntersectedCount<<endl;
+    // for(int i=0; i<bIntersectedCount; ++i){
+    //   cout<<"pid="<<pid<<" x="<<next->p.x<<", y="<<next->p.y<<" label="<<next->label<<" enx="<<next->enex<<endl;
+    //   next=next->next;
+    // }
+    // next=cPolysList[cListId].root;
+    // cout<<"\nClip poly "<<cIntersectedCount<<endl;
+    // for(int i=0; i<cIntersectedCount; ++i){
+    //   cout<<"pid="<<pid<<" x="<<next->p.x<<", y="<<next->p.y<<" label="<<next->label<<" enx="<<next->enex<<endl;
+    //   next=next->next;
+    // }
 
 
-//     // PHASE: 3
-//     labelIntersections2(bListId, cListId);
+    // PHASE: 3
+    labelIntersections2(bListId, cListId);
 
-//     // next=bPolysList[0].root;
-//     // // int pid=0;
-//     // pid=0;
-//     // cout<<"Base poly "<<bIntersectedCount<<endl;
-//     // for(int i=0; i<bIntersectedCount; ++i){
-//     //   cout<<"pid="<<pid<<" x="<<next->p.x<<", y="<<next->p.y<<" label="<<next->label<<" enx="<<next->enex<<endl;
-//     //   next=next->next;
-//     // }
-//     // next=cPolysList[cListId].root;
-//     // cout<<"\nClip poly "<<cIntersectedCount<<endl;
-//     // for(int i=0; i<cIntersectedCount; ++i){
-//     //   cout<<"pid="<<pid<<" x="<<next->p.x<<", y="<<next->p.y<<" label="<<next->label<<" enx="<<next->enex<<endl;
-//     //   next=next->next;
-//     // }
+    // next=bPolysList[0].root;
+    // // int pid=0;
+    // pid=0;
+    // cout<<"Base poly "<<bIntersectedCount<<endl;
+    // for(int i=0; i<bIntersectedCount; ++i){
+    //   cout<<"pid="<<pid<<" x="<<next->p.x<<", y="<<next->p.y<<" label="<<next->label<<" enx="<<next->enex<<endl;
+    //   next=next->next;
+    // }
+    // next=cPolysList[cListId].root;
+    // cout<<"\nClip poly "<<cIntersectedCount<<endl;
+    // for(int i=0; i<cIntersectedCount; ++i){
+    //   cout<<"pid="<<pid<<" x="<<next->p.x<<", y="<<next->p.y<<" label="<<next->label<<" enx="<<next->enex<<endl;
+    //   next=next->next;
+    // }
 
-//     // PHASE: 4
-//     createResult2();
-//     run_time = omp_get_wtime() - start_time;
-//     #ifdef TIME
-//     cp4 = high_resolution_clock::now();
-//     #endif
+    // PHASE: 4
+    createResult2();
+    run_time = omp_get_wtime() - start_time;
+    #ifdef TIME
+    cp4 = high_resolution_clock::now();
+    #endif
 
-//     // if(DEBUG_TIME) end = high_resolution_clock::now();
-//     // post-processing
-//     cleanUpResult2();
+    // if(DEBUG_TIME) end = high_resolution_clock::now();
+    // post-processing
+    cleanUpResult2();
 
 
-//     // write output polygon
-//     #ifdef SAVE
-//       cout << "R ";
-//       savePolygon(rPolyList, outputFile1+to_string(cType)+".txt");
-//     #endif
-//     // savePolygon2(rPolyList, outputFile);
+    // write output polygon
+    #ifdef SAVE
+      cout << "R ";
+      savePolygon(rPolyList, outputFile1+to_string(cType)+".txt");
+    #endif
+    // savePolygon2(rPolyList, outputFile);
 
-//     //clean arrays
-//     bPolLineIdsDup.clear();
-//     cPolLineIdsDup.clear();
-//     intersectTypesDup.clear();
+    //clean arrays
+    bPolLineIdsDup.clear();
+    cPolLineIdsDup.clear();
+    intersectTypesDup.clear();
 
-//     rPolyList.clear();
+    rPolyList.clear();
     
 
-// }
-//   // clean arrays
+}
+  // clean arrays
 
-//   free(intervals);
-//   free(bPoly);
-//   free(cPoly);
+  free(intervals);
+  free(bPoly);
+  free(cPoly);
 
 
-//   bPolysList.clear();
-//   cPolysList.clear();
+  bPolysList.clear();
+  cPolysList.clear();
 
   // int lts=1;
   // int lts=log2(treeSize);
@@ -2635,15 +2660,15 @@ int main(int argc, char *argv[])
     hybrid_clipping(argc, argv); 
   #endif
 
-  #ifdef CPU
-    cout<<"Multi-core algorithm"<<endl;
-    multicore_clipping(argc, argv);
-  #endif
 
-  #ifdef PAM
+    // cout<<"Multi-core algorithm"<<endl;
+    // multicore_clipping(argc, argv);
+
+  // #ifdef PAM
     cout<<"idk la bro"<<endl;
     pam_clipping(argc, argv);
-  #endif
+  // #endif
 
   return 0;
 }
+

@@ -8674,63 +8674,216 @@ void SegTree ::insertToEdgeSet(Edge x)
 
 
 void SegTree ::runAlgorithmMulticore(Edge *edges, int edgesSize) {
+   // //elementary
+   // parlay::sequence<Edge> edges2;
+   // std::vector<REAL> elementaryArray;
+   // for (int i = 0; i < edgesSize; ++i) {
+   //    edges2.push_back(edges[i]);
+   //    Edge& current_edge = edges[i];
+   //    elementaryArray.push_back(edges[i].start);
+   //    elementaryArray.push_back(edges[i].end);
+   // }
+   // std::sort(elementaryArray.begin(), elementaryArray.end());
+   // elementaryArray.erase(std::unique(elementaryArray.begin(), elementaryArray.end()), elementaryArray.end());
+   // //pam_ver
+   // auto point_pairs = parlay::sequence<std::pair<REAL, int>>::from_function(
+   //    elementaryArray.size(), 
+   //    [&](size_t i) {
+   //       return std::make_pair(elementaryArray[i], i);
+   //    }
+   // );
+   // pam::map<REAL, int> point_to_position(point_pairs);
+   // size_t maxSize = point_pairs.size();
+   
+   
+   // int sz = 1;
+   // while (sz < maxSize) {
+   //    sz <<= 1;
+   // }
+   // sz <<= 1;
+   // cover.assign(sz, pam::set<Edge>());
+   // end.assign(sz, pam::set<Edge>());
+   // parlay::sequence<REAL> lowestX(sz);
+   // parlay::sequence<REAL> highestX(sz);
+   // sz >>= 1;
+   // parlay::parallel_for(0, num_edges, [&](size_t i) {
+   //    int l = point_to_position.find(edges[i].start) + sz;
+   //    int r = point_to_position.find(edges[i].end) + sz;   
+   //    end[l].insert(edges[i]);
+   //    end[r].insert(edges[i]);
+   //    l++;
+   //    while (l < r) {
+   //       if (l & 1) cover[l++].insert(edges[i]); 
+   //       if (r & 1) cover[--r].insert(edges[i]); 
+   //       l >>= 1;
+   //       r >>= 1;
+   //    }
+   // });
+   // //no parallelisation
+   // for (int i = sz - 1; i >= 0; --i) {
+   //    end[i] = pam::set<Edge>::map_union(end[i * 2], end[i * 2 + 1]);
+   // }
+   // //end and cover are now constructed.
+   // parlay::parallel_for(0, sz, [&](size_t i) {
+   //    parlay::sequence<Edge> cover_sequence = pam::to_sequence(coverList[i]);
+   //    parlay::sequence<Edge> end_sequence = pam::to_sequence(endList[i]);
+   //    for (const auto& cover_edge : cover_sequence) {
+   //       // for (const auto& end_edge : end_sequence) {
+            
+   //       // }
+   //    }
+   // });
+}
+
+void SegTree ::buildSegtreeSingleCore(Edge *edges, int edgesSize) {
    //elementary
-   parlay::sequence<Edge> edges2;
-   std::vector<REAL> elementaryArray;
+   std::vector<Edge> edges2;
+   std::vector<pair<REAL,int>> eArray;
+   std::vector<REAL> eArray2;
+   // cout<<edgesSize<<endl;
    for (int i = 0; i < edgesSize; ++i) {
       edges2.push_back(edges[i]);
-      Edge& current_edge = edges[i];
-      elementaryArray.push_back(edges[i].start);
-      elementaryArray.push_back(edges[i].end);
+      eArray.emplace_back(edges[i].start, i);
+      eArray.emplace_back(edges[i].end, i);
+      eArray2.push_back(edges[i].start);
+      eArray2.push_back(edges[i].end);
    }
-   std::sort(elementaryArray.begin(), elementaryArray.end());
-   elementaryArray.erase(std::unique(elementaryArray.begin(), elementaryArray.end()), elementaryArray.end());
-   //pam_ver
-   auto point_pairs = parlay::sequence<std::pair<REAL, int>>::from_function(
-      elementaryArray.size(), 
-      [&](size_t i) {
-         return std::make_pair(elementaryArray[i], i);
-      }
-   );
-   pam::map<REAL, int> point_to_position(point_pairs);
-   size_t maxSize = point_pairs.size();
-   
-   
+   std::sort(eArray2.begin(), eArray2.end());
+   std::sort(eArray.begin(), eArray.end());
+   std::unordered_map<int, pair<int,int>> mp;
    int sz = 1;
-   while (sz < maxSize) {
+   while (sz < eArray.size()) {
       sz <<= 1;
    }
    sz <<= 1;
-   cover.assign(sz, pam::set<Edge>());
-   end.assign(sz, pam::set<Edge>());
-   parlay::sequence<REAL> lowestX(sz);
-   parlay::sequence<REAL> highestX(sz);
+   treeSize = sz;
+   this->points = eArray2;
+   this->cover.assign(sz, std::vector<Edge>());
+   this->end.assign(sz, Edge());
    sz >>= 1;
-   parlay::parallel_for(0, num_edges, [&](size_t i) {
-      int l = point_to_position.find(edges[i].start) + sz;
-      int r = point_to_position.find(edges[i].end) + sz;   
-      end[l].insert(edges[i]);
-      end[r].insert(edges[i]);
-      l++;
+   for (int i = 0; i < edgesSize*2; ++i) {
+      if (mp.count(eArray[i].second)) {
+         mp[eArray[i].second].second = i + sz;
+      } else {
+         mp[eArray[i].second] = {i+sz, -1};
+      }
+   }
+   for (auto& [a, b]:mp) {
+      this->end[b.first] = edges[a];
+      this->end[b.second] = edges[a];
+      int l = b.first+1;
+      int r = b.second;
       while (l < r) {
-         if (l & 1) cover[l++].insert(edges[i]); 
-         if (r & 1) cover[--r].insert(edges[i]); 
+         if (l&1) this->cover[++l].push_back(edges[a]);
+         if (r&1) this->cover[r--].push_back(edges[a]);
          l >>= 1;
          r >>= 1;
       }
-   });
-   //no parallelisation
-   for (int i = sz - 1; i >= 0; --i) {
-      end[i] = pam::set<Edge>::map_union(end[i * 2], end[i * 2 + 1]);
    }
-   //end and cover are now constructed.
-   parlay::parallel_for(0, sz, [&](size_t i) {
-      parlay::sequence<Edge> cover_sequence = pam::to_sequence(coverList[i]);
-      parlay::sequence<Edge> end_sequence = pam::to_sequence(endList[i]);
-      for (const auto& cover_edge : cover_sequence) {
-         // for (const auto& end_edge : end_sequence) {
-            
-         // }
+   // for (auto& v:cover) {
+   //    for (const auto& e:v) cout << e.toString();
+   //    cout << endl;
+   // }
+   // for (const auto& e:end) cout << e.toString() << " ";
+   // cout << endl;
+   // cout << this->end[sz].toString() << endl;
+   // cout << this->end[sz+edgesSize*2-1].toString() << endl;
+   // cout << this->end[sz+edgesSize*2].toString() << endl;
+}
+
+/*
+save intersections single core
+For each individual edge in cPoly, we only check the nodes it would've been in.
+*/
+void SegTree ::getIntersectionsSingleCore(Edge *edges, int from, REAL *bPoly, REAL *cPoly, int bSize, int cSize,
+                                              int bType, int cType,
+                                              vector<int> &bPolLineIds, vector<int> &cPolLineIds, vector<int> &intersectTypesDup)
+{
+   
+   double epsilon = EPSILON;
+   // cout << from << " " << from + cSize << endl;
+   for (int i = from; i < from + cSize; ++i) {
+      cout << edges[i].toString() << endl;
+      REAL l = edges[i].start;
+      REAL r = edges[i].end;
+      auto it = std::lower_bound(points.begin(), points.end(), l);
+      auto it2 = std::upper_bound(points.begin(), points.end(), r);
+      int l2 = it-points.begin();
+      int r2 = it2-points.begin();
+      l2 += treeSize>>1; //send to leaf node
+      r2 += treeSize>>1;
+         // cout << "Siu " << l2 << " " <<  r2 << endl;
+      int l3 = l2;
+      int r3 = r2-1;
+      //end to cover
+      int bId, cId = edges[i].id;
+      auto check = [&]() -> void {
+         // cout << bId << " " << cId << " kms" << endl;
+         if (LSMF(bPoly[bId], bPoly[bId + 1],
+                     bPoly[bId + 2], bPoly[bId + 3],
+                     cPoly[cId], cPoly[cId + 1],
+                     cPoly[cId + 2], cPoly[cId + 3]))
+            {
+               //  cout << bId << " " << cId << " kms?" << endl;
+               int intersecType = lineSegmentIntersection2(bPoly[bId], bPoly[bId + 1],
+                                                            bPoly[bId + 2], bPoly[bId + 3],
+                                                            cPoly[cId], cPoly[cId + 1],
+                                                            cPoly[cId + 2], cPoly[cId + 3], epsilon);
+               if (intersecType)
+               { 
+                  // cout << "W" << endl;
+                  bPolLineIds.push_back(bId);
+                  cPolLineIds.push_back(cId);
+                  intersectTypesDup.push_back(intersecType);
+               }
+            }
+      };
+      while (l3 > 1) {
+         for (Edge &e : cover[l3]) {
+            // cout << e.toString() << endl;
+            bId = e.id;
+            check();
+         }
+         l3 >>= 1;
       }
-   });
+      while (r3 > 1) {
+         for (Edge &e : cover[r3]) {
+            // cout << e.toString() << endl;
+            bId = e.id;
+            check();
+         }
+         r3 >>= 1;
+      }
+      for (Edge &e:cover[1]) {
+         // cout << e.toString() << endl;
+         bId = e.id;
+         check();
+      }
+      // l2; //only those between.
+      //cover to end
+      for (int j = l2; j < r2; ++j) {
+         // cout << end[j].toString() << endl;
+         bId = end[j].id;
+         check();
+      }
+      //cover to cover
+      while (l2 < r2) {
+         if (l2&1) {
+            for (const auto& edge:cover[l2]) {
+               bId = edge.id;
+               check();
+            }
+            ++l2;
+         }
+         if (r2&1) {
+            --r2;
+            for (const auto& edge:cover[r2]) {
+               bId = edge.id;
+               check();
+            }
+         }
+         l2 >>= 1;
+         r2 >>= 1;
+      } 
+   }
 }

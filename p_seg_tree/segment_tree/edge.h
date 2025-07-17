@@ -200,4 +200,12 @@ public:
         }
     }
 };
+
+struct IntersectionInfo {
+    point p;           // The (x, y) coordinate of the intersection.
+    int base_edge_id;  // The ID of the edge from the base polygon.
+    int clip_edge_id;  // The ID of the edge from the clippingdpolygon.
+    double alpha;      // The position (0.0 to 1.0) on the base edge.
+    double beta;       // The position (0.0 to 1.0) on the clip edge.
+};
 #endif

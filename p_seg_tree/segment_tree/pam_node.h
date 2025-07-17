@@ -32,8 +32,6 @@ public:
 
     Node() {}
 
-    // No need for addToCoverList or addToEndList methods,
-    // we will call pam_set::insert directly.
 };
 
 #endif // PAM_NODE_H

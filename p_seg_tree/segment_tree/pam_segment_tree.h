@@ -25,7 +25,7 @@ typedef struct dsintersection
 class SegTree
 {
 private:
-    parlay::sequence<Node> segtree;
+    // parlay::sequence<Node> segtree;
     void recQueryTree(REAL qx, Node *root, int nodeIdx, vector<Edge> *edges);
     // void recQueryTreeIterative(REAL qx, Node *root, int nodeIdx, vector<Edge> *edges);
 
@@ -65,10 +65,13 @@ public:
     Edge *treeNodeCoverListArray;
     Edge *intervals2;
 
-    parlay::sequence<pam::set<Edge>> cover(sz);
-    parlay::sequence<pam::set<Edge>> end(sz);
-    parlay::sequence<REAL> lowestX(sz);
-    parlay::sequence<REAL> highestX(sz);
+    // parlay::sequence<pam::set<Edge>> cover;
+    // parlay::sequence<pam::set<Edge>> end;
+    // parlay::sequence<REAL> lowestX;
+    // parlay::sequence<REAL> highestX;
+    vector<REAL> points;
+    vector<vector<Edge>> cover;
+    vector<Edge> end;
 
 
     // duplicate array representation of cover lists in nodes using 2-D array
@@ -158,12 +161,12 @@ public:
 
     ~SegTree()
     {
-        free(treeNode);
-        free(coverListSizes);
-        free(coverListCounts);
-        free(endListSizes);
-        free(endListCounts);
-        free(nodeIntervalArray);
+        // free(treeNode);
+        // free(coverListSizes);
+        // free(coverListCounts);
+        // free(endListSizes);
+        // free(endListCounts);
+        // free(nodeIntervalArray);
     }
 
     Edge seg_union(Edge a, Edge b)
@@ -383,6 +386,11 @@ public:
         int *neighborB, int *neighborC);
     
     void runAlgorithmMulticore(Edge *edges, int edgesSize);
+    void buildSegtreeSingleCore(Edge *edges, int edgesSize);
+    void getIntersectionsSingleCore(Edge *edges, int from, REAL *bPoly, REAL *cPoly, int bSize, int cSize,
+                                              int bType, int cType,
+                                              vector<int> &bPolLineIds, vector<int> &cPolLineIds, vector<int> &intersectTypesDup);
+    
     // void recQueryTree(REAL qx, Node root, int nodeIdx, vector<Edge> *edges);
 
     // void insertAllToEdgeList2(vector<Edge> *edges);
