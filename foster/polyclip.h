@@ -814,7 +814,7 @@ void printInfo(vector<polygon>& bPolysList) {
 
 void printInfoCounts(vector<polygon>& bPolysList) {
   int sum = 0;
-  // cout << "has "<< bPolysList.size() << " component";
+  cout << "has "<< bPolysList.size() << " component";
   if (bPolysList.size() > 1) 
     // cout << "s";
   // cout << " with ";

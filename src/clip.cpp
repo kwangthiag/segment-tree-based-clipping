@@ -268,7 +268,6 @@ void gpc_read_multi_polygon(FILE *bfp, FILE **cfp, int cPolyCount, REAL **bPoly,
       *(*earr + id) = curr;
       // cout<<(*earr+id)->id<<" -- "<<(*earr+id)->type<<" *** "<<(*earr+id)->start<<" "<<(*earr+id)->end<<endl;
       id++;
-      #ifndef pam
       if (minInterval > curr.start)
       {
         minInterval = curr.start;
@@ -277,7 +276,6 @@ void gpc_read_multi_polygon(FILE *bfp, FILE **cfp, int cPolyCount, REAL **bPoly,
       {
         maxInterval = curr.end;
       }
-      #endif
       vtex = point2D(*(*cPoly + v2), *(*cPoly + v2 + 1));
       cPolyList.newVertex(vtex, true);
     }
@@ -2005,7 +2003,6 @@ void multicore_clipping(int argc, char *argv[])
     #endif
       // print base and clipping polygons in their linked list form
     // next=bPolysList[0].root;
-    // next=bPolysList[0].root;
     // int pid=0;
     // cout<<"Base poly "<<bIntersectedCount<<endl;
     // for(int i=0; i<bIntersectedCount; ++i){
@@ -2055,7 +2052,7 @@ void multicore_clipping(int argc, char *argv[])
       cout << "R ";
       savePolygon(rPolyList, outputFile1+to_string(cType)+".txt");
     #endif
-    // savePolygon2(rPolyList, outputFile);
+    savePolygon2(rPolyList, outputFile);
 
     //clean arrays
     bPolLineIdsDup.clear();
@@ -2153,7 +2150,7 @@ void pam_clipping(int argc, char *argv[]) {
   gpc_read_multi_polygon(bFile, cFile, cPolyCount, &bPoly, &cPoly, bSize, clSize, cSizes, &intervals, ic, minVal, maxVal);
 
   // // duplicates the base polygon allowing the clipping layer polygons to work on clipping independently
-  // duplicateBasePoly(cPolyCount);
+  duplicateBasePoly(cPolyCount);
 
   // -------------------------------------------------
   #ifdef TIME
@@ -2170,10 +2167,10 @@ void pam_clipping(int argc, char *argv[]) {
   startPositions[1] = bSize;
   endPositions[0] = bSize;
   // cout << cPolyCount << endl;
-  for (int i = 0; i < cPolyCount + 1; ++i) {
-    cout << cSizes[i] << " ";
-  } 
-  cout << endl;
+  // for (int i = 0; i < cPolyCount + 1; ++i) {
+  //   cout << cSizes[i] << " ";
+  // } 
+  // cout << endl;
   // cSizes[cType]-cSizes[cListId]-1
   for (int i = 1; i < cPolyCount+1; ++i) {
     if (i != cPolyCount) startPositions[i+1] = cSizes[i]-cSizes[i-1]-1 + startPositions[i];
@@ -2183,7 +2180,7 @@ void pam_clipping(int argc, char *argv[]) {
   for (int i:startPositions) cout<<i<<endl;
   for (int i:endPositions) cout<<i<<endl;
   //Create segment tree with only polygon B. I added a clause that minval, maxval is only for pam.
-  SegTree sTree(bSize, ic, minVal, maxVal);
+  SegTree sTree(numEdges, ic, minVal, maxVal);
   // ----------------------------    
   #ifdef DG 
   cout << "Empty segment tree with " << bSize << " edges created" << endl;
@@ -2203,7 +2200,7 @@ void pam_clipping(int argc, char *argv[]) {
   #endif
 
   sTree.POLY_TYPE_COUNT = argc - 1;
-  sTree.buildSegtreeSingleCore(intervals, bSize); //only B.
+  sTree.buildSegtreeSingleCore(intervals, numEdges, bSize); //only B.
   #ifdef TIME
   cp14 = high_resolution_clock::now();
   #endif
@@ -2301,7 +2298,7 @@ void pam_clipping(int argc, char *argv[]) {
     cSize=cSizes[cType]-cSizes[cListId]-1;
     // cSize=clSize;
     // use pointer vector
-    cout <<"fml bro" << endl;
+    // cout <<"fml bro" << endl;
     // sTree.saveIntersectionsIdsMulticore // for case 2
     // sTree.saveIntersectionsIdsMulticore2
     sTree.getIntersectionsSingleCore

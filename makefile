@@ -37,6 +37,7 @@ endif
 ifdef gpu
     DEBUG += -DGPU
 else
+	DEBUG += -DCPU
     DEBUG += -DPAM #Just leave it to confirm that it compiles, was -DCPU before
 endif
 
@@ -51,8 +52,7 @@ cpu: util.o thrust_func.o oacc_segment_tree.o  clip.o
 gpu: util.o thrust_func.o oacc_segment_tree_gpu.o  clip_gpu.o 
 	$(CC) -acc $(OPT) -o bin/seg bin/util.o bin/thrust_func.o bin/oacc_segment_tree_gpu.o bin/clip_gpu.o  $(LIBCUDA) -lcudart
 
-# PAM target
-pam: pam=1 # Sets the pam variable for this- target
+
 pam: util.o thrust_func.o pam_segment_tree.o clip.o
 	$(CC) -acc $(OPT) -mp -o bin/seg bin/util.o bin/pam_segment_tree.o bin/clip.o $(LIBCUDA) -lcudart
 

@@ -70,6 +70,8 @@ public:
     // parlay::sequence<REAL> lowestX;
     // parlay::sequence<REAL> highestX;
     vector<REAL> points;
+    vector<REAL> basePolygonPoints;
+    vector<Edge> basePolygon;
     vector<vector<Edge>> cover;
     vector<Edge> end;
 
@@ -386,7 +388,7 @@ public:
         int *neighborB, int *neighborC);
     
     void runAlgorithmMulticore(Edge *edges, int edgesSize);
-    void buildSegtreeSingleCore(Edge *edges, int edgesSize);
+    void buildSegtreeSingleCore(Edge *edges, int edgesSize, int bSize);
     void getIntersectionsSingleCore(Edge *edges, int from, REAL *bPoly, REAL *cPoly, int bSize, int cSize,
                                               int bType, int cType,
                                               vector<int> &bPolLineIds, vector<int> &cPolLineIds, vector<int> &intersectTypesDup);

@@ -8735,47 +8735,46 @@ void SegTree ::runAlgorithmMulticore(Edge *edges, int edgesSize) {
    // });
 }
 
-void SegTree ::buildSegtreeSingleCore(Edge *edges, int edgesSize) {
+void SegTree ::buildSegtreeSingleCore(Edge *edges, int edgesSize, int bSize) {
    //elementary
-   std::vector<Edge> edges2;
    std::vector<pair<REAL,int>> eArray;
    std::vector<REAL> eArray2;
    // cout<<edgesSize<<endl;
-   for (int i = 0; i < edgesSize; ++i) {
-      edges2.push_back(edges[i]);
+   for (int i = 0; i < bSize; ++i) {
       eArray.emplace_back(edges[i].start, i);
       eArray.emplace_back(edges[i].end, i);
+   }
+   for (int i = 0; i < edgesSize; ++i) {
       eArray2.push_back(edges[i].start);
       eArray2.push_back(edges[i].end);
-   }
+   } 
    std::sort(eArray2.begin(), eArray2.end());
    std::sort(eArray.begin(), eArray.end());
-   std::unordered_map<int, pair<int,int>> mp;
+   eArray2.erase(std::unique(eArray2.begin(), eArray2.end()), eArray2.end());
    int sz = 1;
-   while (sz < eArray.size()) {
+   while (sz < eArray2.size()) {
       sz <<= 1;
    }
    sz <<= 1;
    treeSize = sz;
    this->points = eArray2;
    this->cover.assign(sz, std::vector<Edge>());
-   this->end.assign(sz, Edge());
+   // this->end.assign(sz, Edge());
    sz >>= 1;
-   for (int i = 0; i < edgesSize*2; ++i) {
-      if (mp.count(eArray[i].second)) {
-         mp[eArray[i].second].second = i + sz;
-      } else {
-         mp[eArray[i].second] = {i+sz, -1};
-      }
+   basePolygonPoints.clear();
+   basePolygon.clear();
+   for (const auto& [point, index] : eArray) {
+      basePolygonPoints.push_back(point);
+      basePolygon.push_back(edges[index]);
    }
-   for (auto& [a, b]:mp) {
-      this->end[b.first] = edges[a];
-      this->end[b.second] = edges[a];
-      int l = b.first+1;
-      int r = b.second;
+   for (int i = 0; i < bSize; ++i) {
+      auto it1 = lower_bound(points.begin(), points.end(), edges[i].start);
+      auto it2 = lower_bound(points.begin(), points.end(), edges[i].end);
+      int l = it1 - points.begin() + sz;
+      int r = it2 - points.begin() + sz + 1;
       while (l < r) {
-         if (l&1) this->cover[++l].push_back(edges[a]);
-         if (r&1) this->cover[r--].push_back(edges[a]);
+         if (l&1) this->cover[l++].push_back(edges[i]);
+         if (r&1) this->cover[--r].push_back(edges[i]);
          l >>= 1;
          r >>= 1;
       }
@@ -8801,21 +8800,50 @@ void SegTree ::getIntersectionsSingleCore(Edge *edges, int from, REAL *bPoly, RE
 {
    
    double epsilon = EPSILON;
+   //brute force sanity check
    // cout << from << " " << from + cSize << endl;
+   // for (int i = from; i < from + cSize; ++i) {
+   //    int bId, cId = edges[i].id;
+   //       auto check = [&]() -> void {
+   //       // cout << bId << " " << cId << " kms" << endl;
+   //       if (LSMF(bPoly[bId], bPoly[bId + 1],
+   //                   bPoly[bId + 2], bPoly[bId + 3],
+   //                   cPoly[cId], cPoly[cId + 1],
+   //                   cPoly[cId + 2], cPoly[cId + 3]))
+   //          {
+   //             //  cout << bId << " " << cId << " kms?" << endl;
+   //             int intersecType = lineSegmentIntersection2(bPoly[bId], bPoly[bId + 1],
+   //                                                          bPoly[bId + 2], bPoly[bId + 3],
+   //                                                          cPoly[cId], cPoly[cId + 1],
+   //                                                          cPoly[cId + 2], cPoly[cId + 3], epsilon);
+   //             if (intersecType)
+   //             { 
+   //                // cout << "W" << endl;
+   //                bPolLineIds.push_back(bId);
+   //                cPolLineIds.push_back(cId);
+   //                intersectTypesDup.push_back(intersecType);
+   //             }
+   //          }
+   //    };
+   //    for (int j = 0; j < bSize; ++j) {
+   //       bId = edges[j].id;
+   //       check();
+   //    }
+   // }
    for (int i = from; i < from + cSize; ++i) {
-      cout << edges[i].toString() << endl;
+      // cout << edges[i].toString() << endl;
       REAL l = edges[i].start;
       REAL r = edges[i].end;
       auto it = std::lower_bound(points.begin(), points.end(), l);
-      auto it2 = std::upper_bound(points.begin(), points.end(), r);
+      auto it2 = std::lower_bound(points.begin(), points.end(), r); 
       int l2 = it-points.begin();
       int r2 = it2-points.begin();
       l2 += treeSize>>1; //send to leaf node
       r2 += treeSize>>1;
          // cout << "Siu " << l2 << " " <<  r2 << endl;
       int l3 = l2;
-      int r3 = r2-1;
-      //end to cover
+      int r3 = r2;
+      
       int bId, cId = edges[i].id;
       auto check = [&]() -> void {
          // cout << bId << " " << cId << " kms" << endl;
@@ -8838,6 +8866,7 @@ void SegTree ::getIntersectionsSingleCore(Edge *edges, int from, REAL *bPoly, RE
                }
             }
       };
+      //end to cover
       while (l3 > 1) {
          for (Edge &e : cover[l3]) {
             // cout << e.toString() << endl;
@@ -8859,14 +8888,16 @@ void SegTree ::getIntersectionsSingleCore(Edge *edges, int from, REAL *bPoly, RE
          bId = e.id;
          check();
       }
-      // l2; //only those between.
+      auto l4 = lower_bound(basePolygonPoints.begin(), basePolygonPoints.end(), l);
+      auto r4 = upper_bound(basePolygonPoints.begin(), basePolygonPoints.end(), r);
       //cover to end
-      for (int j = l2; j < r2; ++j) {
+      for (int j = l4-basePolygonPoints.begin(); j < r4 - basePolygonPoints.begin(); ++j) {
          // cout << end[j].toString() << endl;
-         bId = end[j].id;
+         bId = basePolygon[j].id;
          check();
       }
       //cover to cover
+      r2++;
       while (l2 < r2) {
          if (l2&1) {
             for (const auto& edge:cover[l2]) {
