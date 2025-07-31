@@ -1,6 +1,6 @@
 # ------------------------------
 # for ICPP# for ICPP
-OMP_NUM_THREADS=10 bin/./seg data/square.txt data/diamond.txt
+# OMP_NUM_THREADS=10 bin/./seg data/square.txt data/diamond.txt
 OMP_NUM_THREADS=10 bin/./seg data/s.txt data/c.txt 
 OMP_NUM_THREADS=10 bin/./seg data/ne_10m_ocean_0.txt data/continents_521.txt
 OMP_NUM_THREADS=10 bin/./seg data/ne_10m_ocean_0.txt data/continents_1661.txt

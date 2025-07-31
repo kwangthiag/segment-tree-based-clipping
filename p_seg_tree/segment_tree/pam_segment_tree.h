@@ -392,6 +392,10 @@ public:
     void getIntersectionsSingleCore(Edge *edges, int from, REAL *bPoly, REAL *cPoly, int bSize, int cSize,
                                               int bType, int cType,
                                               vector<int> &bPolLineIds, vector<int> &cPolLineIds, vector<int> &intersectTypesDup);
+    void buildSegtreeMultiCore(Edge *edges, int edgesSize, int bSize);
+    void getIntersectionsMultiCore(Edge *edges, int from, REAL *bPoly, REAL *cPoly, int bSize, int cSize,
+                                              int bType, int cType,
+                                              vector<int> &bPolLineIds, vector<int> &cPolLineIds, vector<int> &intersectTypesDup);
     
     // void recQueryTree(REAL qx, Node root, int nodeIdx, vector<Edge> *edges);
 

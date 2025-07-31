@@ -1,5 +1,7 @@
-#ifndef THURST_FUNC_H_
-#define THURST_FUNC_H_
+#ifndef THRUST_FUNC_H_
+#define THRUST_FUNC_H_
+
+#include <thrust/sort.h>
 
 void thrustDeviceStableSortByKey(REAL *arr, int *arrIdx, int size);
 void thrustDeviceStableSortByKey(int *arr, int *arrIdx, int size);

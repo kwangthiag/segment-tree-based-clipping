@@ -47,10 +47,10 @@ all: cpu
 
 cpu: util.o thrust_func.o oacc_segment_tree.o  clip.o 
 	# $(CC) -acc -O2 -o bin/seg bin/util.o thrust_func.o oacc_segment_tree.o bin/clip.o 
-	$(CC) -acc $(OPT) -mp -o bin/seg bin/util.o bin/oacc_segment_tree.o bin/clip.o $(LIBCUDA) -lcudart
+	$(CC) -acc $(OPT) -mp -o bin/seg bin/thrust_func.o bin/util.o bin/oacc_segment_tree.o bin/clip.o $(LIBCUDA) -lcudart
 
 gpu: util.o thrust_func.o oacc_segment_tree_gpu.o  clip_gpu.o 
-	$(CC) -acc $(OPT) -o bin/seg bin/util.o bin/thrust_func.o bin/oacc_segment_tree_gpu.o bin/clip_gpu.o  $(LIBCUDA) -lcudart
+	$(CC) -acc $(OPT) -gpu=managed -o bin/seg bin/util.o bin/thrust_func.o bin/oacc_segment_tree_gpu.o bin/clip_gpu.o  $(LIBCUDA) -lcudart
 
 
 pam: util.o thrust_func.o pam_segment_tree.o clip.o

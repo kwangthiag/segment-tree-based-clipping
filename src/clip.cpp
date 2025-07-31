@@ -2148,7 +2148,9 @@ void pam_clipping(int argc, char *argv[]) {
   // read data into polygon arrays and interval array
   // gpc_read_polygon(bFile, cFile, &bPoly, &cPoly, bSize, cSize, &intervals, ic, minVal, maxVal);
   gpc_read_multi_polygon(bFile, cFile, cPolyCount, &bPoly, &cPoly, bSize, clSize, cSizes, &intervals, ic, minVal, maxVal);
-
+  // cout << intervals[0].toString() << endl;
+  // cout << intervals[bSize-1].toString() << endl;
+  // cout << intervals[bSize].toString() << endl;
   // // duplicates the base polygon allowing the clipping layer polygons to work on clipping independently
   duplicateBasePoly(cPolyCount);
 
@@ -2166,20 +2168,12 @@ void pam_clipping(int argc, char *argv[]) {
   vector<int> endPositions(cPolyCount+1);
   startPositions[1] = bSize;
   endPositions[0] = bSize;
-  // cout << cPolyCount << endl;
-  // for (int i = 0; i < cPolyCount + 1; ++i) {
-  //   cout << cSizes[i] << " ";
-  // } 
-  // cout << endl;
-  // cSizes[cType]-cSizes[cListId]-1
   for (int i = 1; i < cPolyCount+1; ++i) {
     if (i != cPolyCount) startPositions[i+1] = cSizes[i]-cSizes[i-1]-1 + startPositions[i];
     endPositions[i] = cSizes[i]-cSizes[i-1]-1 + startPositions[i];
   }
   // endPositions.back() = numEdges;
-  for (int i:startPositions) cout<<i<<endl;
-  for (int i:endPositions) cout<<i<<endl;
-  //Create segment tree with only polygon B. I added a clause that minval, maxval is only for pam.
+  //Create segment tree with only polygon B.
   SegTree sTree(numEdges, ic, minVal, maxVal);
   // ----------------------------    
   #ifdef DG 
@@ -2200,7 +2194,8 @@ void pam_clipping(int argc, char *argv[]) {
   #endif
 
   sTree.POLY_TYPE_COUNT = argc - 1;
-  sTree.buildSegtreeSingleCore(intervals, numEdges, bSize); //only B.
+  // sTree.buildSegtreeSingleCore(intervals, numEdges, bSize); //only B.
+  sTree.buildSegtreeMultiCore(intervals, numEdges, bSize); //only B.
   #ifdef TIME
   cp14 = high_resolution_clock::now();
   #endif
@@ -2301,7 +2296,8 @@ void pam_clipping(int argc, char *argv[]) {
     // cout <<"fml bro" << endl;
     // sTree.saveIntersectionsIdsMulticore // for case 2
     // sTree.saveIntersectionsIdsMulticore2
-    sTree.getIntersectionsSingleCore
+    // sTree.getIntersectionsSingleCore
+    sTree.getIntersectionsMultiCore
       (intervals, startPositions[cType], bPoly, cPoly, bSize, cSize,
         bType, cType,
         bPolLineIdsDup, cPolLineIdsDup, intersectTypesDup);
@@ -2662,10 +2658,12 @@ int main(int argc, char *argv[])
     // multicore_clipping(argc, argv);
 
   // #ifdef PAM
-    cout<<"idk la bro"<<endl;
+    // cout<<"my algo"<<endl;
     pam_clipping(argc, argv);
   // #endif
 
   return 0;
 }
+
+
 

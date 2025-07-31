@@ -132,6 +132,66 @@ void quickSort(int arr[], int low, int high)
    }
 }
 
+//quickSort but for vectors
+int partition2(std::vector<int>& arr, int low, int high)
+{
+    int pivot = arr[high];
+    int i = (low - 1);
+
+    for (int j = low; j <= high - 1; j++)
+    {
+        if (arr[j] <= pivot)
+        {
+            i++;
+            std::swap(arr[i], arr[j]);
+        }
+    }
+    std::swap(arr[i + 1], arr[high]);
+    return (i + 1);
+}
+
+const int PARALLEL_CUTOFF = 1000;
+
+void quickSortSequential(std::vector<int>& arr, int low, int high) {
+    if (low < high) {
+        int pi = partition2(arr, low, high);
+        quickSortSequential(arr, low, pi - 1);
+        quickSortSequential(arr, pi + 1, high);
+    }
+}
+
+void quickSort2(std::vector<int>& arr, int low, int high)
+{
+    if (low < high)
+    {
+        if (high - low + 1 < PARALLEL_CUTOFF) {
+            quickSortSequential(arr, low, high);
+            return;
+        }
+
+        int pi = partition2(arr, low, high);
+
+        #pragma omp task firstprivate(arr, low, pi)
+        {
+            quickSort2(arr, low, pi - 1);
+        }
+
+        quickSort2(arr, pi + 1, high);
+    }
+}
+
+void parallelQuickSort(std::vector<int>& arr) {
+    if (arr.empty()) return;
+
+    #pragma omp parallel
+    {
+        #pragma omp single nowait
+        {
+            quickSort2(arr, 0, arr.size() - 1);
+        }
+    }
+}
+
 void swapGetIndexArray(REAL *a, REAL *b, int *ia, int *ib)
 {
    REAL t = *a;
@@ -6702,290 +6762,6 @@ void SegTree ::countIntersectionsMulticore(REAL *bPoly, REAL *cPoly, int bSize, 
    #endif
 }
 
-/*
-intersection betwwen edges in each node
-*/
-// -------------------------
-// void SegTree ::polyClipArrayParallel
-//       (REAL *bPoly, REAL *cPoly, int bSize, int cSize,
-//       int *iCount, int *bPolLineIds, int *cPolLineIds, int *intersectTypes){
-// // void SegTree ::polyClipArrayParallel
-// //       (REAL *bPoly, REAL *cPoly, int bSize, int cSize,
-// //       int *iCount, dsintersection *dsint){
-
-//    int ts = treeSize, scl=sumCoverListSize*4;
-//    int sels=sumEndListSize;
-//    int intc=iCount[ts-1];
-//    int bpolys=(bSize+1)*2, cpolys=(cSize+1)*2;
-
-//    /*int *interCountArray;
-//    interCountArray=(int *)malloc((ts)*sizeof(int));
-//    for(int i=0; i<ts; ++i){
-//       interCountArray[i]=0;
-//    }*/
-
-//    // for host
-//    // #pragma acc update self(coverArray [0:sumEndListSize*4], endArray[0:sumEndListSize*4])
-
-//    // for device
-//    // #pragma acc enter data create(intsections[0:intc]) /*copyin(interCountArray[0:ts])*/
-
-//    // #pragma acc enter data create(bPolLineIds[0:intc], cPolLineIds[0:intc], intersectTypes[0:intc])
-//    // #pragma acc parallel loop present(coverArray [0:scl], treeNodeEndListArray[0:sels], coverListSizes[0:ts+1], endListSizes[0:ts+1], endListCounts[0:ts], iCount[0:ts], bPoly[0:bpolys], cPoly[0:cpolys])
-
-//    int nid, clid;
-//    // omp_set_dynamic(0);
-//    // omp_set_num_threads(20);
-//    #pragma omp parallel for private(clid)
-//    // #pragma omp parallel for shared(coverArray, treeNodeEndListArray, coverListSizes, endListSizes, endListCounts, iCount, bPoly, cPoly, bPolLineIds, cPolLineIds, intersectTypes)
-//    for(nid=1; nid<ts; nid++)
-//    {
-//       int interCount=0;
-//       int cs=coverListSizes[nid], ce=coverListSizes[nid+1];
-
-//       // interCountArray[nid-1]=0;
-
-//       // #pragma acc loop
-//       // #pragma omp parallel for
-//       for(clid=cs; clid<ce; ++clid)
-//       {
-//          int  clid2=clid*4;
-//          // b \in C_B(v) and o \in C_O(v)
-//          // #pragma omp for nowait
-//          // #pragma omp parallel for
-//          for(int clid3=clid+1; clid3<ce; ++clid3)
-//          {
-//             int bId, cId;
-//             int clid4=clid3*4;
-//             // check if line segments are from different polygons
-//             if(coverArray[clid2+1]!=coverArray[clid4+1]){
-//                // If clid2 is base polygon. Else clid2 is subject polygon
-//                if(coverArray[clid2+1]==0){
-//                   bId=coverArray[clid2];
-//                   cId=coverArray[clid4];
-//                }else{
-//                   bId=coverArray[clid4];
-//                   cId=coverArray[clid2];
-//                }
-//                // cout<<"case1 bid: "<<bId/2<<" cid: "<<cId/2<<endl;
-//                double alpha, beta;
-//                if (LSMF(bPoly[bId], bPoly[bId+1],
-//                         bPoly[bId+2], bPoly[bId+3],
-//                         cPoly[cId], cPoly[cId+1],
-//                         cPoly[cId+2], cPoly[cId+3]))
-//                {
-//                   int intersecType = lineSegmentIntersection(bPoly[bId], bPoly[bId+1],
-//                                                                bPoly[bId+2], bPoly[bId+3],
-//                                                                cPoly[cId], cPoly[cId+1],
-//                                                                cPoly[cId+2], cPoly[cId+3], &alpha, &beta);
-//                   // int intersecType=1;
-//                   if (intersecType){
-//                      // dsintersection temp;
-//                      // temp.type=intersecType;
-//                      // temp.bPolId=bId;
-//                      // temp.cPolId=cId;
-//                      // #pragma acc atomic update
-//                      // dsint[iCount[nid-1]+(interCountArray[nid]+=1)]=temp;
-//                      // dsint[iCount[nid-1]+interCount]=temp;
-//                      // dsint[iCount[nid-1]]=temp;
-//                      #pragma omp critical
-//                      {
-//                         bPolLineIds[iCount[nid-1]+interCount]=bId;
-//                         cPolLineIds[iCount[nid-1]+interCount]=cId;
-//                         intersectTypes[iCount[nid-1]+interCount]=intersecType;
-//                         interCount+=1;
-//                      }
-//                      // cout<<"*********-----------**** nid="<<nid<<" bid="<<bId<<" cId="<<cId<<endl;
-//                   }
-
-//                   /*REAL intersectX, intersectY;
-//                   point b1, b2, c1, I;
-//                   // int bId=bPolyLineIds[id];
-//                   b1.x=bPoly[bId];
-//                   b1.y=bPoly[bId+1];
-//                   b2.x=bPoly[bId+2];
-//                   b2.y=bPoly[bId+3];
-
-//                   // int cId=cPolyLineIds[id];
-//                   c1.x=cPoly[cId];
-//                   c1.y=cPoly[cId+1];
-
-//                   if(intersecType){
-//                      // if((intersecType==1 || intersecType==3 || intersecType==5 || intersecType==7)){
-//                      //    nonDegenCount++;
-//                      //    count2=nonDegenCount;
-//                      // }
-//                      // else if((intersecType==2 || intersecType==4 || intersecType==6 || intersecType==8)){
-//                      //    count2=0;
-//                      // }
-
-//                      switch(intersecType){
-//                         // case X_INTERSECTION:
-//                         // I and I
-//                         case 1:
-//                            I = add(mulScalar((1.0-alpha), b1), mulScalar(alpha, b2));
-//                            intersectX=I.x;       //consider edge for the intersection array
-//                            intersectY=I.y;
-//                            break;
-//                         case 3:
-//                         case 4:
-//                         case 5:
-//                         case 7:
-//                         case 8:
-//                            intersectX=c1.x;
-//                            intersectY=c1.y;
-//                            break;
-//                         case 2:
-//                         case 6:
-//                            intersectX=b1.x;
-//                            intersectY=b1.y;
-//                         break;
-
-//                      }
-//                      // if(isContain(intersectX, intersectY, nodeIntervalArray[nid*2], nodeIntervalArray[nid*2+1])){
-//                      if(isContain(nodeIntervalArray[nid*2], nodeIntervalArray[nid*2+1], intersectX, intersectY)){
-//                         #pragma omp critical
-//                         {
-//                            bPolLineIds[iCount[nid-1]+interCount]=bId;
-//                            cPolLineIds[iCount[nid-1]+interCount]=cId;
-//                            intersectTypes[iCount[nid-1]+interCount]=intersecType;
-//                            interCount+=1;
-//                         }
-//                      }
-//                   }*/
-
-//                }
-//             }
-//          }
-//          // b \in C_B(v) and o \in E_O(v)
-//          int es=endListSizes[nid], ee=endListSizes[nid]+endListCounts[nid];
-//          // #pragma omp for nowait
-//          // #pragma omp parallel for
-//          for(int elid=es; elid<ee; ++elid)
-//          {
-//             int bId, cId;
-//             int elid2=elid*4;
-//             // check if line segments are from different polygons
-//             // if(coverArray[clid2+1]!=endArray[elid2 + 1]){
-//             if(coverArray[clid2+1]!=treeNodeEndListArray[elid].type){
-//                // If clid2 is base polygon. Else clid2 is subject polygon
-//                if(coverArray[clid2+1]==0){
-//                   bId=coverArray[clid2];
-//                   // cId=endArray[elid2];
-//                   cId=treeNodeEndListArray[elid].id;
-
-//                }else{
-//                   cId=coverArray[clid2];
-//                   // bId=endArray[elid2];
-//                   bId=treeNodeEndListArray[elid].id;
-//                }
-//                double alpha, beta;
-//                // cout<<nid<<" case2 bid: "<<bId/2<<" cid: "<<cId/2<<endl;
-//                if (LSMF(bPoly[bId], bPoly[bId+1],
-//                         bPoly[bId+2], bPoly[bId+3],
-//                         cPoly[cId], cPoly[cId+1],
-//                         cPoly[cId+2], cPoly[cId+3]))
-//                {
-//                   int intersecType = lineSegmentIntersection(bPoly[bId], bPoly[bId+1],
-//                                                                bPoly[bId+2], bPoly[bId+3],
-//                                                                cPoly[cId], cPoly[cId+1],
-//                                                                cPoly[cId+2], cPoly[cId+3], &alpha, &beta);
-//                   // int intersecType=1;
-//                   if (intersecType){
-//                      // dsintersection temp;
-//                      // temp.type=intersecType;
-//                      // temp.bPolId=bId;
-//                      // temp.cPolId=cId;
-//                      // #pragma acc atomic capture
-//                      // {
-//                      //    dsint[iCount[nid-1]+interCount]=temp;
-//                      //    interCount += 1;
-//                      // }
-//                      // #pragma acc atomic capture
-//                      // {
-//                      #pragma omp critical
-//                      {
-//                         bPolLineIds[iCount[nid-1]+interCount]=bId;
-//                         cPolLineIds[iCount[nid-1]+interCount]=cId;
-//                         intersectTypes[iCount[nid-1]+interCount]=intersecType;
-//                         interCount+=1;
-//                      }
-//                      // cout<<"*********-----------**** nid="<<nid<<" bid="<<bId<<" cId="<<cId<<endl;
-//                   }
-
-//                   /*REAL intersectX, intersectY;
-//                   point b1, b2, c1, I;
-//                   // int bId=bPolyLineIds[id];
-//                   b1.x=bPoly[bId];
-//                   b1.y=bPoly[bId+1];
-//                   b2.x=bPoly[bId+2];
-//                   b2.y=bPoly[bId+3];
-
-//                   // int cId=cPolyLineIds[id];
-//                   c1.x=cPoly[cId];
-//                   c1.y=cPoly[cId+1];
-
-//                   if(intersecType){
-//                      // if((intersecType==1 || intersecType==3 || intersecType==5 || intersecType==7)){
-//                      //    nonDegenCount++;
-//                      //    count2=nonDegenCount;
-//                      // }
-//                      // else if((intersecType==2 || intersecType==4 || intersecType==6 || intersecType==8)){
-//                      //    count2=0;
-//                      // }
-
-//                      switch(intersecType){
-//                         // case X_INTERSECTION:
-//                         // I and I
-//                         case 1:
-//                            I = add(mulScalar((1.0-alpha), b1), mulScalar(alpha, b2));
-//                            intersectX=I.x;       //consider edge for the intersection array
-//                            intersectY=I.y;
-//                            break;
-//                         case 3:
-//                         case 4:
-//                         case 5:
-//                         case 7:
-//                         case 8:
-//                            intersectX=c1.x;
-//                            intersectY=c1.y;
-//                            break;
-//                         case 2:
-//                         case 6:
-//                            intersectX=b1.x;
-//                            intersectY=b1.y;
-//                         break;
-
-//                      }
-//                      // if(isContain(intersectX, intersectY, nodeIntervalArray[nid*2], nodeIntervalArray[nid*2+1])){
-//                      if(isContain(nodeIntervalArray[nid*2], nodeIntervalArray[nid*2+1], intersectX, intersectY)){
-//                         #pragma omp critical
-//                         {
-//                            bPolLineIds[iCount[nid-1]+interCount]=bId;
-//                            cPolLineIds[iCount[nid-1]+interCount]=cId;
-//                            intersectTypes[iCount[nid-1]+interCount]=intersecType;
-//                            interCount+=1;
-//                         }
-//                      }
-//                   }*/
-
-//                }
-//             }
-//          }
-//       }
-//    }
-//    // high_resolution_clock::time_point cp1, cp2;
-//    // if(DEBUG_TIME) cp1=high_resolution_clock::now();
-
-//    // #pragma acc update self(bPolLineIds[0:intc], cPolLineIds[0:intc], intersectTypes[0:intc])
-
-//    // if(DEBUG_TIME){
-//    //    cp2=high_resolution_clock::now();
-//    //    auto d1 = duration_cast<microseconds>(cp2-cp1);
-//    //    cout<<" copy saved ids time: "<<d1.count()<<endl;
-//    // }
-// }
-//-----------------------------
 
 // cleaned version for OpenMP
 void SegTree ::polyClipArrayParallel(REAL *bPoly, REAL *cPoly, int bSize, int cSize,
@@ -7938,802 +7714,6 @@ void SegTree::calculateInitLabel(int bSize, int *bNonDegenIntersectCounts,
    }
 }
 
-/*
-Converts end lists of the segment tree into a 2-D array which has nodes and their endlists copy it to GPU
-*/
-/*void SegTree ::copyNodeEndListToGPU()
-{
-   int maxEndListSize = treeNode->at(0)->endList->size();
-
-   for (int nid = 1; nid < treeSize; ++nid)
-   {
-      endListSizes[nid] = treeNode->at(nid)->endList->size();
-      if (maxEndListSize < treeNode->at(nid)->endList->size())
-      {
-         maxEndListSize = treeNode->at(nid)->endList->size();
-      }
-   }
-
-   sumEndListSize=treeSize*maxEndListSize;
-   sumEndListSize*=4;
-   int sel = sumEndListSize;
-   int maxRowSize = maxEndListSize * 4;
-   endArray = new REAL[sumEndListSize];
-   vector<Edge> *endList;
-
-   for (int nid = 0; nid < treeSize; ++nid)
-   {
-      endList = treeNode->at(nid)->endList;
-      for (int elid = 0, elid2 = 0; elid < endList->size(); ++elid, elid2 += 4)
-      {
-         *(endArray + (nid * maxRowSize + elid2)) = endList->at(elid).id;
-         *(endArray + (nid * maxRowSize + elid2 + 1)) = endList->at(elid).type;
-         *(endArray + (nid * maxRowSize + elid2 + 2)) = endList->at(elid).start;
-         *(endArray + (nid * maxRowSize + elid2 + 3)) = endList->at(elid).end;
-      }
-   }
-// #pragma acc enter data copyin(this, endListSizes [0:treeSize], endArray [0:sel])
-}*/
-
-/*
-Converts endEdgeSet list of the segment tree into a 2-D array which has nodes and their endlists copy it to GPU
-this method is not space efficient and does not wor for larger data sets
-*/
-/*void SegTree ::copyNodeEndEdgeSetToGPU()
-{
-   int maxEndListSize = treeNode->at(0)->endEdgeSet->size();
-
-   // cout<<"size "<<endListSizes[0]<<endl;
-   for (int nid = 1; nid < treeSize; ++nid)
-   {
-      endListSizes[nid] = treeNode->at(nid)->endEdgeSet->size();
-      if (maxEndListSize < treeNode->at(nid)->endEdgeSet->size())
-      {
-         maxEndListSize = treeNode->at(nid)->endEdgeSet->size();
-         // cout<<"max size "<<maxEndListSize<<" @"<<nid<<endl;
-      }
-   }
-
-   sumEndListSize=treeSize*maxEndListSize;
-   sumEndListSize*=4;
-   int sel = sumEndListSize;
-   int maxRowSize = maxEndListSize * 4;
-
-   // cout<<treeSize<<" "<<maxEndListSize<<" sumEndListSize "<<sumEndListSize<<endl;
-   endArray = new REAL[sumEndListSize];
-   set<Edge, edge_compare> *endEdgeSet;
-
-   int elid2 = 0;
-   // cout<<"****** end Array *******"<<endl;
-   for (int nid = 0; nid < treeSize; ++nid)
-   {
-      endEdgeSet = treeNode->at(nid)->endEdgeSet;
-      elid2 = 0;
-      // cout<<"nid="<<nid<<" size "<<treeNode->at(nid)->endEdgeSet->size()<<endl;
-      // for (Edge e : *treeNode->at(nid)->endEdgeSet)
-      for(auto s=treeNode->at(nid)->endEdgeSet->begin(); s!=treeNode->at(nid)->endEdgeSet->end(); s++)
-      {
-         // *(endArray + (nid * maxRowSize + elid2)) =  e.id;
-         // *(endArray + (nid * maxRowSize + elid2 + 1)) = e.type;
-         // *(endArray + (nid * maxRowSize + elid2 + 2)) = e.start;
-         // *(endArray + (nid * maxRowSize + elid2 + 3)) = e.end;
-         // if(nid>34945) cout<<"t "<<s->id<<endl;
-         *(endArray + (nid * maxRowSize + elid2)) =  s->id;
-         *(endArray + (nid * maxRowSize + elid2 + 1)) = s->type;
-         *(endArray + (nid * maxRowSize + elid2 + 2)) = s->start;
-         *(endArray + (nid * maxRowSize + elid2 + 3)) = s->end;
-         // cout<<"nid="<<nid<<" e.id: "<<*(endArray + (nid * maxRowSize + elid2))<<endl;
-         elid2 += 4;
-      }
-   }
-#pragma acc enter data copyin(this, endListSizes [0:treeSize], endArray [0:sel])
-}*/
-
-/*
-prefix of an array
-*/
-/*void SegTree :: prefixSumSizeArray(){
-   int *pSum = new int[treeSize];
-   int i, j, e, ts=treeSize;
-   int numWorkers=10;
-   int buf=ts/numWorkers;
-   int *localSum = new int[numWorkers];
-
-   pSum[0]=coverListSizes[0];
-
-   #pragma acc data create(pSum[0:treeSize], localsum[0:numWorkers])
-
-   #pragma acc parallel loop
-   for(i=0; i<numWorkers; ++i){
-      e=i*buf+buf;
-      #pragma acc parallel loop seq
-      for(j=e-buf; j<e; ++j){
-         pSum[j] = pSum[j-1]+coverListSizes[j];
-      }
-      localSum[i]=pSum[e-1];
-      #pragma acc parallel loop
-      for(j=e-buf; j<e; ++j){
-         pSum[j] = pSum[j]+localSum[j-1];
-      }
-   }
-
-
-   for(i=1; i<ts; ++i){
-      cout<<coverListSizes[i]<<", ";
-   }
-   cout<<endl;
-   for(i=1; i<ts; ++i){
-      cout<<pSum[i]<<", ";
-   }
-   cout<<endl;
-}*/
-
-/*
-copy intersections into source polygons at correct positions
-Save neighbor IDs into arrays
-able to handle duplicate occurrances of intersections. But will not work with init labeling. DO NOT USE!
-*/
-/*
-void SegTree ::copyIntersectionsParallel2(
-      REAL **bPoly, REAL **cPoly, int bSize, int cSize,
-      int *bPolyLineIds, int *cPolyLineIds, int polySize,
-      int *bPolLineIdsSortedIndex, int *cPolLineIdsSortedIndex,
-      int *sortedIndiciesB, int *sortedIndiciesC,
-      REAL *intersections, int *intersectTypes,
-      int *bAllIntersectCounts, int *cAllIntersectCounts,
-      int *bNonDegenIntersectCountPS, int *cNonDegenIntersectCountPS,
-      int *intersectAlphaValuesB, int *intersectAlphaValuesC,
-      REAL *intersectedB, REAL *intersectedC,
-      int *neighborsB, int *neighborsC,
-      int *alphaValuesB, int *alphaValuesC){
-   // int id, id2;
-   int size=bSize*2;
-   int bNeighborIntersect[polySize], cNeighborIntersect[polySize];
-
-   // copy source vertices
-   // assume base is the largest polygon
-   for(int id=0, id2=0; id<bSize; id2+=2, id++){
-      int pId=id+bNonDegenIntersectCountPS[id];
-      int pId2=pId*2;
-      // cout<<"pId "<<pId<<endl;
-      intersectedB[pId2]=*(*bPoly+id2);
-      intersectedB[pId2+1]=*(*bPoly+id2+1);
-      alphaValuesB[pId]=-100;    //default value to indentify non intersecting edges
-      neighborsB[pId]=-100;    //default value to indentify non intersecting edges
-      if(id<cSize){
-         pId=id+cNonDegenIntersectCountPS[id];
-         pId2=2*pId;
-         intersectedC[pId2]=*(*cPoly+id2);
-         intersectedC[pId2+1]=*(*cPoly+id2+1);
-         // cout<<"c "<<pId2<<" "<<id2<<" "<<*(*cPoly+id2)<<" "<<*(*cPoly+id2+1);
-         // cout<<" "<<intersectedC[pId]<<" "<<intersectedC[pId+1]<<endl;
-         alphaValuesC[pId]=-100;    //default value to indentify non intersecting edges
-         neighborsC[pId]=-100;    //default value to indentify non intersecting edges
-      }
-   }
-
-   // copy intersections into intersected array at the correct position
-   // run time O(k') time, where k= # unique edge ids of intersections
-   for(int id=0; id<polySize; ++id){
-      int i, bId, nBId, nBId2, cId, nCId, nCId2, blid, blid2, prevblid, clid, clid2, prevclid;
-      // save only non-degenerate cases: base polygon
-      blid=bPolLineIdsSortedIndex[sortedIndiciesB[id]];
-      clid=cPolLineIdsSortedIndex[sortedIndiciesC[id]];
-
-      // if previous edge id and current edge id is same. It has been taken care of before
-      // id=0 is saved without checkeing previous
-      if(id>0){
-         prevblid=bPolLineIdsSortedIndex[sortedIndiciesB[id-1]];
-         prevclid=cPolLineIdsSortedIndex[sortedIndiciesC[id-1]];
-      }
-      if(id<=0 || bPolyLineIds[prevblid]!=bPolyLineIds[blid]){
-
-         // cout<<"****dup "<<bPolyLineIds[blid]<<" "<<cPolyLineIds[blid]<<endl;
-         // handles degenerate cases at starting vertex of the edge
-         if(intersectTypes[blid]==2 || intersectTypes[blid]==4 || intersectTypes[blid]==6 || intersectTypes[blid]==8){
-            cout<<"**source bId="<<bPolyLineIds[blid]<<" cId="<<cPolyLineIds[blid]<<endl;
-            bId=bPolyLineIds[blid]/2;
-            bId+=bNonDegenIntersectCountPS[bId];
-            alphaValuesB[bId]=intersectAlphaValuesB[clid];
-            bNeighborIntersect[blid]=bId;
-            // cout<<"bId "<<bId<<endl;
-         }
-         blid2=2*blid;
-         bId=bPolyLineIds[blid]/2;
-         int start=bAllIntersectCounts[bId];
-         int end=bAllIntersectCounts[bId+1];
-         int nonStart=bNonDegenIntersectCountPS[bId];
-         // handles non-degenerate cases at a given edge
-         nBId=nonStart+bId+1;
-         nBId2=2*nBId;
-         for(i=id; i<id+(end-start); ++i){
-            // nBId=bId+id+1;
-            // nBId2=2*nBId;
-            if(intersectTypes[blid]==1 || intersectTypes[blid]==3 || intersectTypes[blid]==5 || intersectTypes[blid]==7){
-               if(i-id>0){
-                  // cout<<"id="<<id<<" i="<<i<<" blid="<<blid<<endl;
-                  prevblid=bPolLineIdsSortedIndex[sortedIndiciesB[i-1]];
-                  // prevclid=cPolLineIdsSortedIndex[sortedIndiciesC[i-1]];
-                  // cout<<"blid="<<blid<<" prevblid="<<prevblid<<endl;
-               }
-
-               if(i-id<=0 || (bPolyLineIds[prevblid]!=bPolyLineIds[blid] || cPolyLineIds[prevblid]!=cPolyLineIds[blid])){
-                  cout<<"***blid2="<<blid2<<" id="<<id<<" bId="<<bPolyLineIds[blid]<<" cId="<<cPolyLineIds[blid]<<" nBId="<<nBId<<" nBId2="<<nBId2<<" P1("<<intersections[blid2]<<", "<<intersections[blid2+1]<<")"<<endl;
-
-                  intersectedB[nBId2]=intersections[blid2];
-                  intersectedB[nBId2+1]=intersections[blid2+1];
-                  alphaValuesB[nBId]=intersectAlphaValuesB[blid];
-                  bNeighborIntersect[blid]=nBId;
-                  // cout<<"saved"<<endl;
-               }else{
-                  // cout<<"--- bdup "<<bPolyLineIds[blid]<<" "<<cPolyLineIds[blid]<<endl;
-                  // bNeighborIntersect[blid]=bNeighborIntersect[prevblid];
-                  // cNeighborIntersect[clid]=cNeighborIntersect[prevclid];
-                  intersectAlphaValuesB[blid]=-404;    //to identify a duplicate and to ignore
-                  bNeighborIntersect[blid]=-404;
-                  alphaValuesB[nBId]=-404;    //to identify a duplicate and to ignore
-                  neighborsB[nBId]=-404;
-               }
-               ++nBId;
-               nBId2+=2;
-            }else{
-               // first vertex is already added as a non-duplicate
-               if(i>id){
-                  bNeighborIntersect[blid]=-404;
-                  intersectAlphaValuesB[blid]=-404;    //to identify a duplicate and to ignore
-                  alphaValuesB[nBId]=-404;    //to identify a duplicate and to ignore
-                  neighborsB[nBId]=-404;
-               }
-            }
-            if(i<polySize-1){
-               // update blid
-               blid=bPolLineIdsSortedIndex[sortedIndiciesB[i+1]];
-               blid2=2*blid;
-               // clid=cPolLineIdsSortedIndex[sortedIndiciesC[i+1]];
-            }
-         }
-      }
-      // cout<<">>original bId="<<bPolyLineIds[clid]<<" cId="<<cPolyLineIds[clid]<<endl;
-      if(id<=0 || cPolyLineIds[prevclid]!=cPolyLineIds[clid]){
-         // save only non-degenerate cases: clipped polygon
-
-         // cout<<"==original bId="<<bPolyLineIds[clid]<<" cId="<<cPolyLineIds[clid]<<endl;
-         // handles degenerate cases
-         if(intersectTypes[clid]==3 || intersectTypes[clid]==4 || intersectTypes[clid]==5 || intersectTypes[clid]==7 || intersectTypes[clid]==8){
-            cout<<"==source bId="<<bPolyLineIds[clid]<<" cId="<<cPolyLineIds[clid]<<endl;
-            cId=cPolyLineIds[clid]/2;
-            cId+=cNonDegenIntersectCountPS[cId];
-            alphaValuesC[cId]=intersectAlphaValuesC[clid];
-            cNeighborIntersect[clid]=cId;
-            // cout<<clid<<" cId "<<cId<<endl;
-         }
-         // handles non-degenerate cases
-         clid2=2*clid;
-         cId=cPolyLineIds[clid]/2;
-         int start=cAllIntersectCounts[cId];
-         int end=cAllIntersectCounts[cId+1];
-         int nonStart=cNonDegenIntersectCountPS[cId];
-         // nCId=cId+id+1;
-         // nCId2=2*nCId;
-         // cout<<cId<<" c st "<<start<<" "<<end<<endl;
-
-         nCId=nonStart+cId+1;
-         nCId2=2*nCId;
-         for(i=id; i<id+(end-start); i++){
-            cout<<id<<" cId "<<cId<<" nCId "<<nCId<<" "<<nCId2<<endl;
-            if(intersectTypes[clid]==1 || intersectTypes[clid]==2 || intersectTypes[clid]==6){
-               if(i-id>0){
-                  // cout<<"id="<<id<<" i="<<i<<" clid="<<clid<<endl;
-                  // prevblid=bPolLineIdsSortedIndex[sortedIndiciesB[i-1]];
-                  prevclid=cPolLineIdsSortedIndex[sortedIndiciesC[i-1]];
-                  // cout<<"clid="<<clid<<" prevclid="<<prevclid<<endl;
-               }
-               // cout<<"original cId="<<cPolyLineIds[clid]<<" bId="<<bPolyLineIds[clid]<<endl;
-               if(i-id<=0 || (bPolyLineIds[prevclid]!=bPolyLineIds[clid] || cPolyLineIds[prevclid]!=cPolyLineIds[clid])){
-                  cout<<"==clid2="<<clid2<<" id="<<id<<" bId="<<bPolyLineIds[clid]<<" cId="<<cPolyLineIds[clid]<<" nCId2="<<nCId2<<" P1("<<intersections[clid2]<<", "<<intersections[clid2+1]<<")"<<endl;
-                  intersectedC[nCId2]=intersections[clid2];
-                  intersectedC[nCId2+1]=intersections[clid2+1];
-                  alphaValuesC[nCId]=intersectAlphaValuesC[clid];
-                  cNeighborIntersect[clid]=nCId;
-               }else{
-                  // cout<<"--- c dup "<<bPolyLineIds[clid]<<" "<<cPolyLineIds[clid]<<endl;
-                  // bNeighborIntersect[blid]=bNeighborIntersect[prevblid];
-                  // cNeighborIntersect[clid]=cNeighborIntersect[prevclid];
-                  intersectAlphaValuesC[clid]=-404;    //to identify a duplicate and to ignore
-                  cNeighborIntersect[clid]=-404;
-                  alphaValuesC[nCId]=-404;    //to identify a duplicate and to ignore
-                  neighborsC[nCId]=-404;
-               }
-               ++nCId;
-               nCId2+=2;
-            }else{
-               // first vertex is already added as a non-duplicate
-               if(i>id){
-                  cNeighborIntersect[clid]=-404;
-                  intersectAlphaValuesC[clid]=-404;    //to identify a duplicate and to ignore
-                  alphaValuesC[nCId]=-404;
-                  neighborsC[nCId]=-404;
-               }
-            }
-            if(i<polySize-1){
-               // update clid
-               // blid=bPolLineIdsSortedIndex[sortedIndiciesB[i+1]];
-               // cout<<i<<" here "<<sortedIndiciesC[i+1]<<endl;
-               clid=cPolLineIdsSortedIndex[sortedIndiciesC[i+1]];
-               clid2=2*clid;
-            }
-         }
-      }
-   }
-   cout<<"here"<<endl;
-   int dupCount=0;
-   // copy neighbor ids
-   for(int i=0; i<polySize; ++i){
-      // cout<<i<<" neighbors b="<<bNeighborIntersect[i]<<" alphaB="<<intersectAlphaValuesB[i]<<" c="<<cNeighborIntersect[i]<<" alphaC="<<intersectAlphaValuesC[i]<<endl;
-      // +1 acts as an offset
-      if(intersectAlphaValuesB[i]!=-404){
-         neighborsB[bNeighborIntersect[i]]=cNeighborIntersect[i]+1;
-         neighborsC[cNeighborIntersect[i]]=bNeighborIntersect[i]+1;
-      }else{
-         dupCount++;
-      }
-      if(DEBUG && intersectAlphaValuesB[i]==-100 && intersectAlphaValuesC[i]!=-100){
-         cout<<"ERROR: Base and clipping have different combinations from duplicates. Need to fix this!!!"<<endl;
-      }
-
-   }
-   cout<<"Duplicate count: "<<dupCount<<endl;
-}*/
-
-/*
-original. Errors
-map<REAL, pair<Node *, Node *>> *SegTree ::preparePointsToNodeMap()
-{
-   if (m_elementaryPoints == NULL && false == m_elementaryPoints->empty())
-   {
-      cout << "Error: m_elementaryPoints in insertToLeafLevelEndList" << endl;
-      return NULL;
-   }
-
-   // special handling for 1st point
-   REAL pt0 = m_elementaryPoints->at(0);
-   // cout<<"pt0 is "<<pt0<<endl;
-
-   map<REAL, pair<Node *, Node *>> *ptToAdjNodeMap = new map<REAL, pair<Node *, Node *>>();
-
-   int firstLeafIndex = treeSize / 2;
-   Node *firstLeaf = treeNode->at(firstLeafIndex);
-   pair<Node *, Node *> nodePair1 = make_pair(firstLeaf, firstLeaf);
-
-   pair<REAL, pair<Node *, Node *>> kv1 = make_pair(pt0, nodePair1);
-   ptToAdjNodeMap->insert(kv1);
-
-   int lastLeafIndex = treeSize - 1;
-   // cout << endl
-      //   << " firstLeafIndex " << firstLeafIndex << " lastLeafIndex " << lastLeafIndex << " m_elementaryPoints->size() " << m_elementaryPoints->size() << endl;
-
-   int leafIndex = firstLeafIndex;
-   int i;
-   for (i = 1; i < m_elementaryPoints->size() - 1; i++, leafIndex++)
-   {
-      // cout<<"m_elemetry points "<<m_elementaryPoints->at(i)<<endl;
-      Node *leftLeaf = treeNode->at(leafIndex);
-      Node *rightLeaf = treeNode->at(leafIndex + 1);
-
-      pair<Node *, Node *> ithNodePair = make_pair(leftLeaf, rightLeaf);
-
-      REAL ithPt = m_elementaryPoints->at(i);
-      pair<REAL, pair<Node *, Node *>> kv = make_pair(ithPt, ithNodePair);
-      ptToAdjNodeMap->insert(kv);
-   }
-   // special handling for the last point
-   // cout<<endl<<"i = "<<i<<endl;
-
-   Node *lastLeaf = treeNode->at(lastLeafIndex);
-   pair<Node *, Node *> lastNodePair = make_pair(lastLeaf, lastLeaf);
-
-   REAL lastPt = m_elementaryPoints->at(m_elementaryPoints->size() - 1);
-   pair<REAL, pair<Node *, Node *>> lastKV = make_pair(lastPt, lastNodePair);
-   ptToAdjNodeMap->insert(lastKV);
-
-   return ptToAdjNodeMap;
-}*/
-
-// ---------------------------
-/*
-radix sort - V1. Sorts one array and other array
-*/
-/*void countSort(REAL *otherData,  REAL *outputOther, int *input, int start, int n, int exp){
-   int output[n]; // output array
-   int lsVals[n];  //save least significant digits of the input
-   int i, count[10] = {0};
-
-   // Store count of occurrences in count[]
-   for(i=start; i<(start+n); i++){
-      lsVals[i]=input[i]%exp;
-      count[lsVals[i]]++;
-   }
-
-   // Change count[i] so that count[i] now contains actual
-   //  position of this digit in output[]
-   for(i=1; i<10; i++)
-      count[i]+=count[i-1];
-
-   // Build the output array
-   for (i=(start+n-1); i>=start; i--) {
-      output[count[lsVals[i]]-1]=input[i];
-      outputOther[count[lsVals[i]]-1]=otherData[i];
-      count[lsVals[i]]--;
-   }
-
-   // Copy the output array to arr[], so that arr[] now
-   // contains sorted numbers according to current digit
-   for(i=start; i<(start+n); i++){
-      input[i]=output[i];
-      otherData[i]=outputOther[i];
-      // cout<<"i "<<i<<" "<<output[i]<<" "<<input[i]<<endl;
-   }
-}
-
-// The main function to that sorts arr[] of size n using
-// Radix Sort
-void radixsort(REAL *otherData, int *data, int start, int n, int m){
-   // Do counting sort for every digit. Note that instead
-   // of passing digit number, exp is passed. exp is 10^i
-   // where i is current digit number
-   for (int exp=1, i=0; m>i; exp*=10){
-      countSort(otherData, data, start, n, exp*10);
-      // cout<<"round "<<exp<<"\n\n"<<endl;
-   }
-}*/
-// ---------------------------
-
-/*
-check edge intersections between two given edges
-returns intersection type
-*/
-/*int edgeIntersection
-      (REAL l1p1x, REAL l1p1y, REAL l1p2x, REAL l1p2y,
-      REAL l2p1x, REAL l2p1y, REAL l2p2x, REAL l2p2y,
-      double &alpha, double &beta,
-      int bPolyId, int cPolyId, int &bPolyIdIntersect, int &cPolyIdIntersect){
-   point lines[4];
-   int type;
-
-   lines[0].x = l1p1x;
-   lines[0].y = l1p1y;
-   lines[1].x = l1p2x;
-   lines[1].y = l1p2y;
-   lines[2].x = l2p1x;
-   lines[2].y = l2p1y;
-   lines[3].x = l2p2x;
-   lines[3].y = l2p2y;
-   type=lineSegmentIntersection
-               (lines[0].x, lines[0].y,  lines[1].x, lines[1].y,
-               lines[2].x, lines[2].y, lines[3].x, lines[3].y,
-               alpha, beta);
-   if(type){
-      bPolyIdIntersect=bPolyId;
-      cPolyIdIntersect=cPolyId;
-      return type;
-   }
-   // type=lineSegmentIntersection
-   //             (lines[0].x, lines[0].y,  lines[1].x, lines[1].y,
-   //             lines[3].x, lines[3].y, lines[2].x, lines[2].y,
-   //             alpha, beta);
-   // if(type){
-   //    bPolyIdIntersect=bPolyId;
-   //    cPolyIdIntersect=cPolyId+2;
-   //    return type;
-   // }
-   // type=lineSegmentIntersection
-   //             (lines[1].x, lines[1].y,  lines[0].x, lines[0].y,
-   //             lines[2].x, lines[2].y, lines[3].x, lines[3].y,
-   //             alpha, beta);
-   // if(type){
-   //    bPolyIdIntersect=bPolyId+2;
-   //    cPolyIdIntersect=cPolyId;
-   //    return type;
-   // }type=lineSegmentIntersection
-   //             (lines[1].x, lines[1].y,  lines[0].x, lines[0].y,
-   //             lines[3].x, lines[3].y, lines[2].x, lines[2].y,
-   //             alpha, beta);
-   // if(type){
-   //    bPolyIdIntersect=bPolyId+2;
-   //    cPolyIdIntersect=cPolyId+2;
-   //    return type;
-   // }
-
-   return type; // default exit when no intersections are reported
-
-}*/
-
-// -----------------------------------------------
-// Query segment tree methods. Partially completed
-
-/*vector<Edge> *SegTree ::querySegTree(REAL qx)
-{
-   // Input: the root of a (subtree of a) segment tree and query point qx.
-   // Output: All intervals in the tree containing qx.
-   vector<Edge> *edges = new vector<Edge>();
-   // if query is out of root's range, it does not include in the tree
-   if (qx < treeNode->at(1)->interval.start || qx > treeNode->at(1)->interval.end)
-   {
-      return edges;
-   }
-
-   recQueryTree(qx, treeNode->at(1), 1, edges);
-   recQueryTreeIterative(qx, treeNode->at(1), 1, edges);
-
-   return edges;
-}
-
-void SegTree ::recQueryTree(REAL qx, Node *root, int nodeIdx, vector<Edge> *edges)
-{
-   // edges->push_back(root.coverList);
-   string edge = root->interval.toString();
-   // cout<<"cover list size "<<root->coverList->size()<<" "<<nodeIdx<<" "<<edge<<endl;
-   if (root->coverList != NULL && root->coverList->size() > 0)
-   {
-      // cout<<"cover list size "<<root.coverList->size()<<endl;
-      edges->insert(edges->end(), root->coverList->begin(), root->coverList->end());
-   }
-   // if root is not a leaf
-   int leftIdx = 2 * nodeIdx;
-
-   if (leftIdx < treeSize)
-   {
-      Node *leftChild = treeNode->at(leftIdx);
-      if (leftChild->interval.contains(qx))
-      {
-         recQueryTree(qx, leftChild, leftIdx, edges);
-      }
-   }
-
-   int rightIdx = 2 * nodeIdx + 1;
-   if (rightIdx < treeSize)
-   {
-      Node *rightChild = treeNode->at(rightIdx);
-      if (rightChild->interval.contains(qx))
-      {
-         recQueryTree(qx, rightChild, rightIdx, edges);
-      }
-   }
-}
-
-void SegTree ::recQueryTreeIterative(REAL qx, Node *root, int nodeIdx, vector<Edge> *edges)
-{
-   int maxCoverListSize = 0;
-   int coverListSizes[treeSize];
-   // #pragma acc parallel loop copyin(treeNode[:treeSize])
-   for (int nid = 1; nid < treeSize; ++nid)
-   {
-      coverListSizes[nid] = 0;
-      if (treeNode->at(nid)->interval.contains(qx))
-      {
-         if (treeNode->at(nid)->coverList != NULL && treeNode->at(nid)->coverList->size() > 0)
-         {
-            // edges->insert(edges->end(), treeNode->at(nid)->coverList->begin(), treeNode->at(nid)->coverList->end());
-            coverListSizes[nid] = treeNode->at(nid)->coverList->size();
-            if (maxCoverListSize < treeNode->at(nid)->coverList->size())
-            {
-               maxCoverListSize = treeNode->at(nid)->coverList->size();
-            }
-         }
-      }
-   }
-
-   int resultSize = treeSize * maxCoverListSize;
-   Edge **qresults = new Edge *[resultSize];
-   vector<Edge> *coverList;
-
-   // #pragma acc parallel loop copyin(treeNode[0:treeSize]) present(coverListSizes[:treeSize]) copyout(qresults[:resultSize])
-   for (int nid = 1; nid < treeSize; ++nid)
-   {
-      // cout<<"nn "<<nid<<"-> "<<treeNode->at(nid)->interval.start<<" "<<treeNode->at(nid)->interval.end<<endl;
-      if (treeNode->at(nid)->interval.contains(qx))
-      {
-         if (treeNode->at(nid)->coverList != NULL && treeNode->at(nid)->coverList->size() > 0)
-         {
-            coverList = treeNode->at(nid)->coverList;
-            for (int clid = 0; clid < coverList->size(); ++clid)
-            {
-               *(qresults + (nid * maxCoverListSize + clid)) = &coverList->at(clid);
-            }
-         }
-      }
-   }
-
-   if (DEBUG_MODE)
-      cout << "Max cover list size: " << maxCoverListSize << endl;
-   // for(int i=1; i<treeSize; ++i){
-   //    cout<<"Node="<<i<<" ["<<treeNode->at(i)->interval.start<<"-"<<treeNode->at(i)->interval.end <<"] cl_size="<<coverListSizes[i]<<endl;
-   //    for(int j=0; j<coverListSizes[i]; ++j){
-   //       cout<<"\tline_id> "<<(*(qresults+(i*maxCoverListSize+j)))->id<<endl;
-   //    }
-   //    cout<<endl;
-   // }
-   // cout<<"\ntotal "<<val<<endl;
-}*/
-// -----------------------------------------------
-
-// original
-/*
-void SegTree ::insertToLeafLevelEdgeList(vector<Edge> *edges)
-{
-   map<REAL, pair<Node *, Node *>> *ptToNodeMap = preparePointsToNodeMap();
-
-   if (ptToNodeMap == NULL)
-   {
-      cout << "BUG: map empty" << endl;
-      exit(1);
-   }
-   else
-   {
-      cout << "Map Size " << ptToNodeMap->size() << endl;
-   }
-
-   std::map<REAL, pair<Node *, Node *>>::iterator it;
-   // cout<<"before for loop all edges "<<endl;
-   for (Edge e : *edges)
-   {
-      // start point
-      // if(e.type ==1) cout<<"Start point "<<e.start<<" "<<e.end<<" type: "<<e.type<<" id: "<<e.id<<endl;
-      it = ptToNodeMap->find(e.start);
-      if (it != ptToNodeMap->end())
-      // if (e.start!=e.end && it != ptToNodeMap->end())
-      {
-         pair<Node *, Node *> nodePair = ptToNodeMap->at(e.start);
-
-         Node *after = nodePair.second;
-         after->addToEndList(e);
-         after->addToEndEdgeSet(e);
-
-         // if(after->interval.start==e.start || after->interval.start==e.end || after->interval.end==e.start || after->interval.end==e.end)
-         // {
-         // // if(after->interval.start==e.first || after->interval.end==e.first){
-         //    Node *before = nodePair.first;
-         //    before->addToEndList(e);
-         //    before->addToEndEdgeSet(e);
-         // }
-         // if(e.type ==1) cout<<"Added point "<<e.start<<" "<<e.end<<" type: "<<e.type<<" id: "<<e.id<<endl;
-      }
-
-      // end point
-      it = ptToNodeMap->find(e.end);
-      if (it != ptToNodeMap->end())
-      // if (e.start!=e.end && it != ptToNodeMap->end())
-      {
-         pair<Node *, Node *> nodePair = ptToNodeMap->at(e.end);
-         Node *before = nodePair.first;
-
-         before->addToEndList(e);
-         before->addToEndEdgeSet(e);
-
-         // if(before->interval.start==e.start || before->interval.start==e.end || before->interval.end==e.start || before->interval.end==e.end)
-         // {
-         //    Node *after = nodePair.second;
-         //    after->addToEndList(e);
-         //    after->addToEndEdgeSet(e);
-         // }
-      }
-   }
-
-   // convert set ds to vector ds
-   // int firstLeafIndex = treeSize/2;
-   // int lastLeafIndex = treeSize-1;
-
-   // for(int nodeIdx = firstLeafIndex; nodeIdx <= lastLeafIndex; nodeIdx++)
-   // {
-   //    Node *leaf = treeNode->at(nodeIdx);
-   //    //leaf->endEdgeSet
-   //    set<Edge,edge_compare> *endSet = leaf->endEdgeSet;
-   //    leaf->endList = new vector<Edge>( endSet->begin(), endSet->end());
-   // }
-
-}*/
-
-// Buddhi
-/*
-void SegTree ::insertAllToEdgeList2(vector<Edge> *edges)
-{
-   for (Edge e : *edges){
-      insertToEdgeSet(e);
-   }
-}
-
-void SegTree ::insertEdgeToEdegSet(Edge x, Node *root, int nodeIdx)
-{
-   if (root->interval.contains(x.start) || root->interval.contains(x.end)){
-      root->addToEndEdgeSet(x);
-   }
-   else{
-      int leftIdx = 2 * nodeIdx;
-      if (leftIdx < treeSize){
-         Node *leftChild = treeNode->at(leftIdx);
-         if (x.intersects(leftChild->interval))
-         {
-            insertEdgeToEdegSet(x, leftChild, leftIdx);
-         }
-      }
-      int rightIdx = 2 * nodeIdx + 1;
-      if (rightIdx < treeSize){
-         Node *rightChild = treeNode->at(rightIdx);
-         if (x.intersects(rightChild->interval))
-         {
-            insertEdgeToEdegSet(x, rightChild, rightIdx);
-         }
-      }
-   }
-}
-
-void SegTree ::insertToEdgeSet(Edge x)
-{
-   insertEdgeToEdegSet(x, treeNode->at(1), 1);
-}*/
-
-
-void SegTree ::runAlgorithmMulticore(Edge *edges, int edgesSize) {
-   // //elementary
-   // parlay::sequence<Edge> edges2;
-   // std::vector<REAL> elementaryArray;
-   // for (int i = 0; i < edgesSize; ++i) {
-   //    edges2.push_back(edges[i]);
-   //    Edge& current_edge = edges[i];
-   //    elementaryArray.push_back(edges[i].start);
-   //    elementaryArray.push_back(edges[i].end);
-   // }
-   // std::sort(elementaryArray.begin(), elementaryArray.end());
-   // elementaryArray.erase(std::unique(elementaryArray.begin(), elementaryArray.end()), elementaryArray.end());
-   // //pam_ver
-   // auto point_pairs = parlay::sequence<std::pair<REAL, int>>::from_function(
-   //    elementaryArray.size(), 
-   //    [&](size_t i) {
-   //       return std::make_pair(elementaryArray[i], i);
-   //    }
-   // );
-   // pam::map<REAL, int> point_to_position(point_pairs);
-   // size_t maxSize = point_pairs.size();
-   
-   
-   // int sz = 1;
-   // while (sz < maxSize) {
-   //    sz <<= 1;
-   // }
-   // sz <<= 1;
-   // cover.assign(sz, pam::set<Edge>());
-   // end.assign(sz, pam::set<Edge>());
-   // parlay::sequence<REAL> lowestX(sz);
-   // parlay::sequence<REAL> highestX(sz);
-   // sz >>= 1;
-   // parlay::parallel_for(0, num_edges, [&](size_t i) {
-   //    int l = point_to_position.find(edges[i].start) + sz;
-   //    int r = point_to_position.find(edges[i].end) + sz;   
-   //    end[l].insert(edges[i]);
-   //    end[r].insert(edges[i]);
-   //    l++;
-   //    while (l < r) {
-   //       if (l & 1) cover[l++].insert(edges[i]); 
-   //       if (r & 1) cover[--r].insert(edges[i]); 
-   //       l >>= 1;
-   //       r >>= 1;
-   //    }
-   // });
-   // //no parallelisation
-   // for (int i = sz - 1; i >= 0; --i) {
-   //    end[i] = pam::set<Edge>::map_union(end[i * 2], end[i * 2 + 1]);
-   // }
-   // //end and cover are now constructed.
-   // parlay::parallel_for(0, sz, [&](size_t i) {
-   //    parlay::sequence<Edge> cover_sequence = pam::to_sequence(coverList[i]);
-   //    parlay::sequence<Edge> end_sequence = pam::to_sequence(endList[i]);
-   //    for (const auto& cover_edge : cover_sequence) {
-   //       // for (const auto& end_edge : end_sequence) {
-            
-   //       // }
-   //    }
-   // });
-}
 
 void SegTree ::buildSegtreeSingleCore(Edge *edges, int edgesSize, int bSize) {
    //elementary
@@ -8911,6 +7891,165 @@ void SegTree ::getIntersectionsSingleCore(Edge *edges, int from, REAL *bPoly, RE
             for (const auto& edge:cover[r2]) {
                bId = edge.id;
                check();
+            }
+         }
+         l2 >>= 1;
+         r2 >>= 1;
+      } 
+   }
+}
+
+void SegTree ::buildSegtreeMultiCore(Edge *edges, int edgesSize, int bSize) {
+   //elementary
+   std::vector<pair<REAL,int>> eArray;
+   std::vector<REAL> eArray2;
+   // cout<<edgesSize<<endl;
+   for (int i = 0; i < bSize; ++i) {
+      eArray.emplace_back(edges[i].start, i);
+      eArray.emplace_back(edges[i].end, i);
+   }
+   for (int i = 0; i < edgesSize; ++i) {
+      eArray2.push_back(edges[i].start);
+      eArray2.push_back(edges[i].end);
+   } 
+   std::sort(eArray2.begin(), eArray2.end());
+   std::sort(eArray.begin(), eArray.end());
+   eArray2.erase(std::unique(eArray2.begin(), eArray2.end()), eArray2.end());
+   int sz = 1;
+   while (sz < eArray2.size()) {
+      sz <<= 1;
+   }
+   sz <<= 1;
+   treeSize = sz;
+   this->points = eArray2;
+   this->cover.assign(sz, std::vector<Edge>());
+   // this->end.assign(sz, Edge());
+   sz >>= 1;
+   basePolygonPoints.clear();
+   basePolygon.clear();
+   for (const auto& [point, index] : eArray) {
+      basePolygonPoints.push_back(point);
+      basePolygon.push_back(edges[index]);
+   }
+   #pragma omp parallel for
+   for (int i = 0; i < bSize; ++i) {
+      auto it1 = lower_bound(points.begin(), points.end(), edges[i].start);
+      auto it2 = lower_bound(points.begin(), points.end(), edges[i].end);
+      int l = it1 - points.begin() + sz;
+      int r = it2 - points.begin() + sz + 1;
+      while (l < r) {
+         if (l&1) {
+            #pragma omp critical
+            this->cover[l++].push_back(edges[i]);
+         }
+         if (r&1) {
+            #pragma omp critical
+            this->cover[--r].push_back(edges[i]);
+         }
+         l >>= 1;
+         r >>= 1;
+      }
+   }
+}
+
+/*
+save intersections multicore
+For each individual edge in cPoly, we only check the nodes it would've been in.
+*/
+void SegTree ::getIntersectionsMultiCore(Edge *edges, int from, REAL *bPoly, REAL *cPoly, int bSize, int cSize,
+                                              int bType, int cType,
+                                              vector<int> &bPolLineIds, vector<int> &cPolLineIds, vector<int> &intersectTypesDup)
+{
+   
+   double epsilon = EPSILON;
+   int i;
+   #pragma omp parallel for private(i)
+   for (i = from; i < from + cSize; ++i) {
+      // cout << edges[i].toString() << endl;
+
+      REAL l = edges[i].start;
+      REAL r = edges[i].end;
+      auto it = std::lower_bound(points.begin(), points.end(), l);
+      auto it2 = std::lower_bound(points.begin(), points.end(), r); 
+      int l2 = it-points.begin();
+      int r2 = it2-points.begin();
+      l2 += treeSize>>1; //send to leaf node
+      r2 += treeSize>>1;
+         // cout << "Siu " << l2 << " " <<  r2 << endl;
+      int l3 = l2;
+      int r3 = r2;
+      int bId, cId = edges[i].id;
+      auto check = [=, &bPolLineIds, &cPolLineIds, &intersectTypesDup](int bId, int cId) -> void {
+      //    cout << bId << " " << cId << " kms" << endl;
+      //          // int bsize = bSize;
+      // // int csize = cSize;
+      //  cout << bPoly[bId] << " " <<  bPoly[bId+1] << " " << bPoly[bId+2] << " "  << bPoly[bId+3] << endl;
+      //  cout << cPoly[cId] << " " <<  cPoly[cId+1] << " " << cPoly[cId+2] << " "  << cPoly[cId+3] << endl;
+         if (LSMF(bPoly[bId], bPoly[bId + 1],
+                     bPoly[bId + 2], bPoly[bId + 3],
+                     cPoly[cId], cPoly[cId + 1],
+                     cPoly[cId + 2], cPoly[cId + 3]))
+            {
+               int intersecType = lineSegmentIntersection2(bPoly[bId], bPoly[bId + 1],
+                                                            bPoly[bId + 2], bPoly[bId + 3],
+                                                            cPoly[cId], cPoly[cId + 1],
+                                                            cPoly[cId + 2], cPoly[cId + 3], epsilon);
+               if (intersecType)
+               { 
+                  // cout << "W" << endl;
+                   #pragma omp critical
+                  {
+                  bPolLineIds.push_back(bId);
+                  cPolLineIds.push_back(cId);
+                  intersectTypesDup.push_back(intersecType);
+                  }
+               }
+            }
+      };
+      //end to cover
+      while (l3 > 1) {
+         for (const Edge &e : cover[l3]) {
+            bId = e.id;
+
+            check(bId, cId);
+         }
+         l3 >>= 1;
+      }
+      while (r3 > 1) {
+         for (const Edge &e : cover[r3]) {
+            bId = e.id;
+            check(bId, cId);
+         }
+         r3 >>= 1;
+      }
+      for (const Edge &e:cover[1]) {
+         // cout << e.toString() << endl;
+         bId = e.id;
+         check(bId, cId);
+      }
+      auto l4 = lower_bound(basePolygonPoints.begin(), basePolygonPoints.end(), l);
+      auto r4 = upper_bound(basePolygonPoints.begin(), basePolygonPoints.end(), r);
+      //cover to end
+      for (int j = l4-basePolygonPoints.begin(); j < r4 - basePolygonPoints.begin(); ++j) {
+         // cout << end[j].toString() << endl;
+         bId = basePolygon[j].id;
+         check(bId, cId);
+      }
+      //cover to cover
+      r2++;
+      while (l2 < r2) {
+         if (l2&1) {
+            for (const auto& edge:cover[l2]) {
+               bId = edge.id;
+               check(bId, cId);
+            }
+            ++l2;
+         }
+         if (r2&1) {
+            --r2;
+            for (const auto& edge:cover[r2]) {
+               bId = edge.id;
+               check(bId, cId);
             }
          }
          l2 >>= 1;

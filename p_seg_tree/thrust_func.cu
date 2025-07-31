@@ -15,6 +15,7 @@ struct compareByStart {
     }
 };
 
+
 /*device methods*/
 void thrustDeviceStableSortByKey(REAL *arr, int *arrIdx, int size){
     thrust::stable_sort_by_key(thrust::device, arr, arr+size, arrIdx);
